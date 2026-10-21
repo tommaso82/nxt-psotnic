@@ -29,4 +29,7 @@ test ! -e "$tmp/tampered.cfg"
 printf 'a long unique testing password 2026\n' | "$bin" config encrypt "$tmp/bot.cfg" --output "$tmp/stdin.nxt" --password-stdin
 printf 'a long unique testing password 2026\n' | "$bin" config decrypt "$tmp/stdin.nxt" --output "$tmp/stdin.cfg" --password-stdin
 cmp "$tmp/bot.cfg" "$tmp/stdin.cfg"
+"$bin" config encrypt "$tmp/bot.cfg" --output "$tmp/argument.nxt" --password 'CLI test passphrase 2026'
+"$bin" config decrypt "$tmp/argument.nxt" --output "$tmp/argument.cfg" --password 'CLI test passphrase 2026'
+cmp "$tmp/bot.cfg" "$tmp/argument.cfg"
 echo '[+] NXT Crypt standalone tests passed'
