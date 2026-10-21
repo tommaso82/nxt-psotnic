@@ -20,6 +20,7 @@
 
 #include "prots.h"
 #include "global-var.h"
+#include "nxt-crypto.h"
 #include <sstream>
 
 #define __itoa_num		16
