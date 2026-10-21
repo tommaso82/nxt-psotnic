@@ -824,8 +824,8 @@ class CONFIG : public options
 
 	CONFIG();
 	void polish();
-	void load(const char *file, bool decrypted=false);
-	options::event *save(bool decrypted=false);
+	void load(const char *file, bool decrypted=true);
+	options::event *save(bool decrypted=true);
 	bool checkOwnerpass(const char *str);
 };
 
