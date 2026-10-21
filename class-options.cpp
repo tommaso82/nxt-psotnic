@@ -533,14 +533,17 @@ options::event *CONFIG::save(bool decrypted)
 
 	getcwd(cwd, MAX_LEN);
 
-	if(conf.open(file, O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR) < 1)
+	if(!decrypted) {
+		_event.setError(NULL, "Legacy Blowfish encryption disabled for new configs");
+		return &_event;
+	}
+	if(conf.open(file, O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR) < 0)
 	{
-		_event.setError(NULL, "cannot create crypted config '%s/%s': %s\n", cwd, (const char *) file, strerror(errno));
+		_event.setError(NULL, "cannot create config '%s/%s': %s\n", cwd, (const char *) file, strerror(errno));
 		return &_event;
 	}
 
-	if(!decrypted)
-		conf.enableLameCrypt();
+	// Save plaintext; NXT encryption is always a separate explicit command.
 
 	ptrlist<ent>::iterator i = list.begin();
 	while(i)
