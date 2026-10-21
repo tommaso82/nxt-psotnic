@@ -43,3 +43,12 @@ jobs:
         run: perl configure --disable-modules
       - name: Compile Psotnic
         run: make dynamic
+      - name: Integrated bot CLI smoke test (without IRC network)
+        run: |
+          g++ -std=c++11 -O0 -I. class-blowfish.cpp tests/legacy-fixture.cpp -o /tmp/legacy-smoke-fixture
+          /tmp/legacy-smoke-fixture /tmp/legacy-smoke-old.cfg
+          ./bin/psotnic config import /tmp/legacy-smoke-old.cfg --seed-file tests/fixtures/legacy-seed.h --preview > /tmp/legacy-smoke-preview.cfg
+          grep -q 'nick legacybot' /tmp/legacy-smoke-preview.cfg
+          ./bin/psotnic config import /tmp/legacy-smoke-old.cfg --binary /tmp/legacy-smoke-fixture --output /tmp/legacy-smoke-new.nxt --to nxt --password 'synthetic CI password for smoke test'
+          ./bin/psotnic config decrypt /tmp/legacy-smoke-new.nxt --output /tmp/legacy-smoke-recovered.cfg --password 'synthetic CI password for smoke test'
+          cmp /tmp/legacy-smoke-preview.cfg /tmp/legacy-smoke-recovered.cfg
