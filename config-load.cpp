@@ -20,6 +20,10 @@
 
 #include "prots.h"
 #include "global-var.h"
+#include "nxt-crypto.h"
+#include <string>
+#include <stdexcept>
+#include <sodium.h>
 
 void CONFIG::load(const char *file, bool decrypted)
 {
@@ -38,23 +42,49 @@ void CONFIG::load(const char *file, bool decrypted)
 
 	getcwd(cwd, MAX_LEN);
 
-	if(decrypted)
-		printf("[*] Loading decrypted config from '%s/%s'\n", cwd, file);
-	else
-		printf("[*] Loading config from '%s/%s'\n", cwd, file);
-
-	if(f.open(file, O_RDWR) < 0)
-	{
-		printf("[-] Cannot open config file '%s/%s': %s\n", cwd, file, strerror(errno));
+	(void)decrypted; // Historical debug flag; the format determines how we read.
+	bool encrypted = nxtcrypto::is_nxt_file(file);
+	std::string plaintext;
+	size_t pos = 0;
+	if(nxtcrypto::is_legacy_file(file)) {
+		printf("[-] Legacy Blowfish config detected. Import it before startup.\n");
 		exit(1);
 	}
-
-	if(!decrypted)
-		f.enableLameCrypt();
+	if(encrypted) {
+		try {
+			plaintext = nxtcrypto::decrypt_file(file);
+			if(plaintext.find('\0') != std::string::npos)
+				throw std::runtime_error("NUL in config");
+		} catch(const std::exception &e) {
+			printf("[-] Cannot read NXT config: %s\n", e.what());
+			exit(1);
+		}
+		printf("[*] Loading NXT encrypted config from '%s/%s'\n", cwd, file);
+	} else {
+		printf("[*] Loading plaintext config from '%s/%s'\n", cwd, file);
+		if(f.open(file, O_RDONLY) < 0) {
+			printf("[-] Cannot open config file '%s/%s': %s\n", cwd, file, strerror(errno));
+			exit(1);
+		}
+	}
 
 	while(1)
 	{
-		n = f.readln(buf, MAX_LEN);
+		if(encrypted) {
+			if(pos >= plaintext.size()) break;
+			size_t end = plaintext.find('\n', pos);
+			if(end == std::string::npos) end = plaintext.size();
+			size_t count = end - pos;
+			if(count >= MAX_LEN) {
+				printf("[-] Encrypted configuration line exceeds MAX_LEN\n");
+				exit(1);
+			}
+			memcpy(buf, plaintext.data() + pos, count);
+			buf[count] = '\0';
+			n = static_cast<int>(count);
+			if(n && buf[n-1]=='\r') buf[--n]='\0';
+			pos = (end == plaintext.size()) ? end : end + 1;
+		} else n = f.readln(buf, MAX_LEN);
 		if(n == -1) break;
 		if(!n) continue;
 
@@ -70,6 +100,8 @@ void CONFIG::load(const char *file, bool decrypted)
 			++errors;
 		}
 	}
+
+	if(encrypted && !plaintext.empty()) sodium_memzero(&plaintext[0], plaintext.size());
 
 	/* Basic checks */
 	if(!nick.getLen())

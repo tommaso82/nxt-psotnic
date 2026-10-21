@@ -20,6 +20,8 @@
 
 #include "prots.h"
 #include "global-var.h"
+#include "nxt-crypto.h"
+#include <sodium.h>
 #include <sstream>
 
 #define __itoa_num		16
@@ -332,6 +334,11 @@ int rmdirext(const char *dir)
 
 void parse_cmdline(int argc, char *argv[])
 {
+	if(argc > 1 && !strcmp(argv[1], "config"))
+	{
+		int status = nxtcrypto::config_command(argc, argv);
+		::exit(status);
+	}
 	int i;
 #ifdef HAVE_DEBUG
 	bool decrypted = false;
@@ -340,9 +347,9 @@ void parse_cmdline(int argc, char *argv[])
 	if(argc == 1)
 	{
 #ifdef HAVE_DEBUG
-		printf("Syntax: %s [-v] [-a] [-d] [-u] [-n] [-ne] [T decrypted config] [crypted config]\n", argv[0]);
+		printf("Syntax: %s [-v] [-a] [-d] [-u] [-n] [-ne] [--password-file PATH] [config file]\n", argv[0]);
 #else
-		printf("Syntax: %s [-v] [-a] [-n] [-ne] [crypted config]\n", argv[0]);
+		printf("Syntax: %s [-v] [-a] [-n] [-ne] [config file]\n", argv[0]);
 #endif
 		exit(1);
 	}
@@ -395,6 +402,16 @@ void parse_cmdline(int argc, char *argv[])
 			exit(0);
 		}
 
+		else if(!strcmp(argv[i], "--password") && i+1 < argc)
+		{
+			++i;
+			nxtcrypto::set_password_argument(argv[i]);
+			sodium_memzero(argv[i], strlen(argv[i]));
+		}
+		else if(!strcmp(argv[i], "--password-file") && i+1 < argc)
+			nxtcrypto::set_password_file(argv[++i]);
+		else if(!strcmp(argv[i], "--password-stdin"))
+			nxtcrypto::set_password_stdin();
 		else if(!strcmp(argv[i], "-n"))
 			createInitialConfig();
 
