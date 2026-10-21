@@ -3,6 +3,7 @@
 //         salt[16], nonce[24], ciphertext + authentication tag.
 // The whole 58-byte header is authenticated as additional data.
 #include "nxt-crypto.h"
+#include "nxt-legacy.h"
 #include <sodium.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -189,6 +190,8 @@ void usage() {
         "  psotnic config encrypt INPUT --output OUTPUT [password option]\n"
         "  psotnic config decrypt INPUT --output OUTPUT [password option]\n"
         "  psotnic config preview INPUT [password option]\n"
+        "  psotnic config import OLD.cfg --seed-file seed.h --output bot.cfg [--to plain|nxt]\n"
+        "  psotnic config import OLD.cfg --binary ./old-psotnic --preview\n"
         "Password: --password-file PATH | --password-stdin | --password TEXT (unsafe)\n");
 }
 } // namespace
@@ -224,7 +227,21 @@ std::string decrypt_file(const char *path) {
         wipe(pass);wipe(input);wipe(password_arg);has_password_arg=false;throw;
     }
 }
+void encrypt_plaintext_to_file(const std::string& content, const char *path) {
+    if(content.empty()) throw std::runtime_error("cannot encrypt empty configuration");
+    std::string pass=password(true);
+    try {
+        std::vector<unsigned char> bytes(content.begin(), content.end());
+        std::vector<unsigned char> crypt=seal(bytes,pass);
+        wipe(bytes);
+        wipe(pass);
+        try { save_new(path,crypt.data(),crypt.size()); wipe(crypt); }
+        catch(...) {wipe(crypt);throw;}
+    } catch(...) {wipe(pass);throw;}
+}
 int config_command(int argc,char **argv) {
+    if(argc>2 && !strcmp(argv[2],"import"))
+        return nxtlegacy::import_command(argc,argv);
     if(argc<4) {usage();return 1;}
     std::string action=argv[2];
     const char *input=argv[3], *output=NULL;

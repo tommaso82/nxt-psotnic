@@ -3,7 +3,7 @@
 This milestone adds **plaintext by default** and an explicit opt-in NXTCRYPT
 format. The former Blowfish encryption is intentionally NOT used for new
 configurations. Existing legacy encrypted configs must first be imported
-using a future legacy-importer milestone; the original files are preserved.
+using the explicit legacy importer. The original files are always preserved.
 
 ## Build
 
@@ -26,6 +26,36 @@ Commands also support the three password options. Without one, they prompt on
 /dev/tty with echo disabled (encrypt prompts twice). Outputs are created
 with 0600 permissions; existing outputs are never overwritten.
 
+## Legacy importer
+
+Import a Psotnic Blowfish v3 config (12-byte header, independent per-line
+8-byte Blowfish blocks). The importer NEVER runs supplied executable files.
+
+- `./bin/psotnic config import old.cfg --seed-file old-seed.h --preview`
+  prints the entire recovered configuration, **including credentials**.
+- `./bin/psotnic config import old.cfg --seed-file old-seed.h --output new.cfg`
+  saves plaintext (mode 0600, never overwrites).
+- `./bin/psotnic config import old.cfg --binary ./old-psotnic --output new.cfg`
+  searches the **data and instruction bytes** of the old ELF x86-64 executable
+  for specific patterns of the compiler-generated `gen_cfg_seed` function.
+- `./bin/psotnic config import old.cfg --binary ./old-psotnic --output new.nxt --to nxt`
+  deciphers the legacy file in memory, asks for a NXT Crypt password (or accepts
+  --password-file/--password-stdin/--password), and writes a new encrypted
+  copy without intermediate plaintext files.
+
+`--seed-file` and `--binary` are alternatives; one must be present.
+`--preview` is explicit and always shows passwords in clear text.
+
+**Limits:** Binary extraction is heuristic and only recognizes tested GCC
+x86-64 ELF patterns (O0/O1/O2). Older 32-bit executables, different compilers,
+other optimization modes, or heavily modified binaries may not be recoverable.
+The file must validate plausibly as a config before any output is written.
+Because legacy Blowfish is unauthenticated, plausibility checks are not a
+cryptographic guarantee. `--seed-file` is preferred whenever available.
+
+Existing `.ul` files are unchanged. The importer currently supports the
+legacy *configuration* v3 format only, not userlists or old config versions.
+
 ## Algorithm and format
 
 Binary format:
@@ -41,7 +71,7 @@ Existing userlist `.ul` encryption is unaffected.
 
 ## Scope / limits
 
-**Legacy seed recovery/import, plus SOCKS5/HTTP CONNECT, are NOT included.**
+**SOCKS5/HTTP CONNECT and legacy userlist import are NOT included.**
 Full bot compilation and integration tests are required before merge.
 Never put `.cfg`, `.nxt`, `.pass`, `.ul` or generated seed files in Git.
 When a systemd service is started unattended, provision the password through a

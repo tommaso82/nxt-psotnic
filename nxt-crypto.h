@@ -8,6 +8,7 @@ void set_password_argument(const char *password);
 void set_password_file(const char *path);
 void set_password_stdin();
 std::string decrypt_file(const char *path);
+void encrypt_plaintext_to_file(const std::string& content, const char *path);
 int config_command(int argc,char **argv);
 }
 #endif

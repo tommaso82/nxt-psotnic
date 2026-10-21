@@ -52,6 +52,7 @@ $targets{'debug'} = '-DHAVE_DEBUG -g -fno-inline -pedantic -Wall -Wno-long-long 
 
 my $filelist = "
 nxt-crypto.o
+nxt-legacy.o
 class-adns.o
 class-adns-firedns.o
 class-adns-pthread.o
@@ -107,6 +108,7 @@ scram.o";
 
 my $headerlist = "
 nxt-crypto.h
+nxt-legacy.h
 blowfish.h
 class-ent.h
 classes.h
