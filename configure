@@ -51,6 +51,7 @@ $targets{'dynamic'} = '-Wall -Wno-non-virtual-dtor';
 $targets{'debug'} = '-DHAVE_DEBUG -g -fno-inline -pedantic -Wall -Wno-long-long -Wformat=2 -Wunused -Wno-non-virtual-dtor';
 
 my $filelist = "
+nxt-crypto.o
 class-adns.o
 class-adns-firedns.o
 class-adns-pthread.o
@@ -105,6 +106,7 @@ signals.o
 scram.o";
 
 my $headerlist = "
+nxt-crypto.h
 blowfish.h
 class-ent.h
 classes.h
@@ -162,6 +164,11 @@ print "[*] Operating system: $os\n";
 my ($cflags, $lflags) = getGccOptions();
 
 chdir('..');
+if(system('pkg-config --exists libsodium') != 0) { die "libsodium-dev required\n"; }
+my $sodium_cflags = `pkg-config --cflags libsodium`;
+my $sodium_libs = `pkg-config --libs libsodium`;
+chomp($sodium_cflags);chomp($sodium_libs);
+$cflags .= " $sodium_cflags ";$lflags .= " $sodium_libs ";
 
 if($antiptrace)
 {
