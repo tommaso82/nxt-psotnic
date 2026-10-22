@@ -1,6 +1,6 @@
 # nxt-psotnic
 
-nxt-psotnic is a fork of gay-psotnic 0.1.1. It retains the original IRC and botnet architecture while adding encrypted configuration and userlist files, migration from legacy Blowfish storage, and optional outbound proxy support.
+nxt-psotnic is a fork of gay-psotnic 0.1.1, preserving full compatibility with classic Psotnic's IRC and botnet behavior. It adds optional NXTCRYPT encryption, legacy Blowfish file import, and outbound SOCKS5 / HTTP CONNECT support.
 
 Current version: **0.1.0-dev**. The executable is still named `psotnic`.
 
@@ -23,7 +23,7 @@ The executable is built at `bin/psotnic`.
 ./bin/psotnic BOT_CONFIG
 ```
 
-The wizard creates a configuration; use `-ne` for expert mode. Encryption is optional and disabled by default. When enabled, the wizard writes an encrypted `.cfg.nxt` file and, if an initial userlist is created, an encrypted `.ul.nxt` file. Start the bot using the **actual filename** produced by the wizard.
+The wizard creates a configuration; use `-ne` for expert mode. Configurations and userlists are plaintext by default. Enabling NXTCRYPT in the wizard creates an encrypted `.cfg.nxt` file and, if an initial userlist is created, an encrypted `.ul.nxt` file. Start the bot using the **actual filename** produced by the wizard.
 
 Use `-d` to keep the bot in the foreground. Run `./bin/psotnic --help` for all startup options.
 
@@ -36,7 +36,7 @@ NXTCRYPT uses Argon2id and XChaCha20-Poly1305. Configuration saves and userlist 
 ./bin/psotnic userlist encrypt bot.ul --output bot.ul.nxt
 ```
 
-The `config` and `userlist` commands also support decryption, preview and import of legacy Blowfish files. Run `./bin/psotnic config --help` or `./bin/psotnic userlist --help` for the available options. See [encrypted storage](docs/NXT-CONFIG-CRYPTO.md) for file format, migration and password handling.
+Classic Psotnic's Blowfish-encrypted configurations and userlists can be imported using the original bot binary. For supported builds, nxt-psotnic extracts the encryption seed directly from the binary without executing it; the original seed file can also be supplied. The `config` and `userlist` commands support import, decryption and preview. See [encrypted storage](docs/NXT-CONFIG-CRYPTO.md) for usage, supported formats and password handling.
 
 ## Outbound proxy
 
