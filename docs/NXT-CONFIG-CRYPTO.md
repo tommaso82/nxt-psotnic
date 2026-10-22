@@ -21,6 +21,10 @@ run the repository's normal `./configure` and `make dynamic` sequence.
 - `./bin/psotnic --password-stdin bot.nxt` reads a password from standard input.
 - `./bin/psotnic --password "secret" bot.nxt` is supported, but unsafe for normal use
   because command lines may be visible in history, process listings and logs.
+- The partyline `.cfg-save` command works at runtime: with a plaintext config the
+  file is atomically replaced; with an NXTCRYPT config the key derived at startup
+  (cached in memory like the userlist session key) re-encrypts the file with a
+  fresh nonce, so the config never lands on disk as plaintext.
 
 Commands also support the three password options. Without one, they prompt on
 /dev/tty with echo disabled (encrypt prompts twice). Outputs are created

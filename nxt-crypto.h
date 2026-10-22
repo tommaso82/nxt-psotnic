@@ -13,6 +13,10 @@ int config_command(int argc,char **argv);
 int userlist_command(int argc,char **argv);
 void begin_bootstrap();
 void finish_bootstrap();
+// Config session mirror of the userlist mechanism: the key derived at
+// startup is cached and .cfg-save re-encrypts with a fresh nonce.
+bool config_encrypted_session();
+void save_config_data(std::string& content,const char *path);
 std::string load_userlist_data(const char *path);
 void save_userlist_data(std::string& content,const char *path);
 bool userlist_encrypted_session();

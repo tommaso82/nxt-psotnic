@@ -20,6 +20,10 @@
 
 #include "prots.h"
 #include "global-var.h"
+#include "nxt-crypto.h"
+#include <sodium.h>
+#include <string>
+#include <stdexcept>
 
 //options::event ent::_event;
 
@@ -535,7 +539,6 @@ void CONFIG::polish()
 
 options::event *CONFIG::save(bool decrypted)
 {
-	inetconn conf;
 	char cwd[MAX_LEN];
 
 	getcwd(cwd, MAX_LEN);
@@ -544,23 +547,42 @@ options::event *CONFIG::save(bool decrypted)
 		_event.setError(NULL, "Legacy Blowfish encryption disabled for new configs");
 		return &_event;
 	}
-	if(conf.open(file, O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR) < 0)
-	{
-		_event.setError(NULL, "cannot create config '%s/%s': %s\n", cwd, (const char *) file, strerror(errno));
+	// Serialize to RAM first (same capture path as the userlist), then a
+	// single atomic private write. When the running config is NXT encrypted
+	// the session key derived at startup re-encrypts the file in place with
+	// a fresh nonce, mirroring userlist autosave; plaintext configs are
+	// atomically replaced.
+	std::string plain;
+	inetconn conf;
+	try {
+		conf.capture = &plain;
+		// open() used to set STATUS_FILE for the classic file serializer.
+		conf.status |= STATUS_FILE;
+
+		ptrlist<ent>::iterator i = list.begin();
+		while(i)
+		{
+			if(!i->isDefault() && i->isPrintable())
+				conf.send("%s", i->print());
+			i++;
+		}
+		conf.capture = NULL;
+
+		if(plain.empty())
+			throw std::runtime_error("empty configuration");
+		nxtcrypto::save_config_data(plain, file);
+	} catch(const std::exception &e) {
+		conf.capture = NULL;
+		if(!plain.empty()) sodium_memzero(&plain[0], plain.size());
+		_event.setError(NULL, "cannot save config '%s/%s': %s", cwd, (const char *) file, e.what());
 		return &_event;
 	}
+	if(!plain.empty()) sodium_memzero(&plain[0], plain.size());
 
-	// Save plaintext; NXT encryption is always a separate explicit command.
-
-	ptrlist<ent>::iterator i = list.begin();
-	while(i)
-	{
-		if(!i->isDefault() && i->isPrintable())
-			conf.send("%s", i->print());
-		i++;
-	}
-
-	_event.setOk(NULL, "config file has been saved");
+	if(nxtcrypto::config_encrypted_session())
+		_event.setOk(NULL, "config file has been saved (NXT encrypted)");
+	else
+		_event.setOk(NULL, "config file has been saved");
 	return &_event;
 }
 

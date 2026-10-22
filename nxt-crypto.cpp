@@ -34,6 +34,10 @@ unsigned char ul_key[crypto_aead_xchacha20poly1305_ietf_KEYBYTES]={0};
 bool ul_active=false;
 std::vector<unsigned char> ul_header;
 std::string ul_path;
+unsigned char cfg_key[crypto_aead_xchacha20poly1305_ietf_KEYBYTES]={0};
+bool cfg_active=false;
+std::vector<unsigned char> cfg_header;
+std::string cfg_path;
 void ready() { if(sodium_init()<0) throw std::runtime_error("libsodium initialization failed"); }
 void wipe(std::string &s) { if(!s.empty()) sodium_memzero(&s[0],s.size()); s.clear(); }
 void wipe(std::vector<unsigned char> &v) { if(!v.empty()) sodium_memzero(v.data(),v.size()); v.clear(); }
@@ -226,12 +230,26 @@ void set_password_stdin() {
 std::string decrypt_file(const char *path) {
     std::vector<unsigned char> input=load_bytes(path);
     std::string pass=password(false);
+    unsigned char key[crypto_aead_xchacha20poly1305_ietf_KEYBYTES]={0};
     try {
-        std::string out=unseal(input,pass);
-        if(bootstrap) { wipe(bootstrap_password); bootstrap_password=pass; }
+        std::string out=unseal(input,pass,key);
+        if(bootstrap) {
+            wipe(bootstrap_password); bootstrap_password=pass;
+            // Cache the derived key so the running config can be re-encrypted
+            // by .cfg-save later, exactly like the userlist session key.
+            if(input.size()>=HDR) {
+                sodium_memzero(cfg_key,sizeof cfg_key);
+                memcpy(cfg_key,key,sizeof key);
+                cfg_header.assign(input.begin(),input.begin()+HDR);
+                cfg_path=path;
+                cfg_active=true;
+            }
+        }
+        sodium_memzero(key,sizeof key);
         wipe(pass);wipe(input);wipe(password_arg);has_password_arg=false;
         return out;
     } catch(...) {
+        sodium_memzero(key,sizeof key);
         wipe(pass);wipe(input);wipe(password_arg);has_password_arg=false;throw;
     }
 }
@@ -268,12 +286,12 @@ std::string load_userlist_data(const char *path) {
         throw;
     }
 }
-// Atomic replacement: temporary userlists are private; encrypted userlists
-// are NEVER written to disk as plaintext, even during an autosave.
-// Atomic userlist writer for up to three sequential spans.
+// Atomic private replacement for config and userlist files: the temporary
+// file is created with 0600 and the target is replaced by rename, so an
+// autosave never leaves a partially written file behind.
 // Writing the header, ciphertext and detached tag separately avoids a second
 // full-size buffer and preserves the existing NXTCRYPT wire format.
-void atomic_userlist(const char *target,
+void atomic_private_write(const char *target,
                      const unsigned char *part1,size_t len1,
                      const unsigned char *part2=NULL,size_t len2=0,
                      const unsigned char *part3=NULL,size_t len3=0) {
@@ -287,10 +305,10 @@ void atomic_userlist(const char *target,
     std::vector<char> name(tmp.begin(),tmp.end());
     name.push_back('\0');
     int fd=mkstemp(name.data());
-    if(fd<0) throw std::runtime_error("cannot create temporary userlist");
+    if(fd<0) throw std::runtime_error("cannot create temporary file");
     bool renamed=false;
     try {
-        if(fchmod(fd,0600)!=0) throw std::runtime_error("cannot set userlist permissions");
+        if(fchmod(fd,0600)!=0) throw std::runtime_error("cannot set file permissions");
         const unsigned char *parts[3]={part1,part2,part3};
         const size_t lengths[3]={len1,len2,len3};
         for(unsigned int i=0;i<3;++i) {
@@ -319,46 +337,70 @@ void atomic_userlist(const char *target,
         throw;
     }
 }
+// Shared encrypted-session saver (config and userlist): the plaintext string
+// becomes ciphertext in-place, the stored KDF header is reused with a fresh
+// random nonce, and a detached AEAD tag avoids any full-size extra buffer.
+void session_save_encrypted(std::string& plaintext,const char *path,
+                            const unsigned char *key,const unsigned char *stored) {
+    unsigned char header[HDR];
+    unsigned char mac[crypto_aead_xchacha20poly1305_ietf_ABYTES];
+    memcpy(header,stored,HDR);
+    randombytes_buf(header+18+crypto_pwhash_SALTBYTES,
+                    crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+    unsigned char *data=reinterpret_cast<unsigned char*>(&plaintext[0]);
+    unsigned long long maclen=0;
+    const int rc=crypto_aead_xchacha20poly1305_ietf_encrypt_detached(
+        data,mac,&maclen,data,plaintext.size(),
+        header,HDR,NULL,header+18+crypto_pwhash_SALTBYTES,key);
+    if(rc!=0 || maclen!=sizeof(mac)) {
+        sodium_memzero(mac,sizeof(mac));
+        sodium_memzero(header,sizeof(header));
+        throw std::runtime_error("session encryption failed");
+    }
+    try {
+        atomic_private_write(path,header,sizeof(header),data,plaintext.size(),mac,sizeof(mac));
+    } catch(...) {
+        sodium_memzero(mac,sizeof(mac));
+        sodium_memzero(header,sizeof(header));
+        throw;
+    }
+    sodium_memzero(mac,sizeof(mac));
+    sodium_memzero(header,sizeof(header));
+}
+// A plaintext session must never silently downgrade an encrypted file.
+void plaintext_guard(const char *path,const char *what) {
+    const size_t pathlen=strlen(path);
+    if(pathlen>=4 && memcmp(path+pathlen-4,".nxt",4)==0)
+        throw std::runtime_error(std::string("refusing to write plaintext ")+what+
+                                 " into .nxt; explicitly encrypt first");
+    if(is_nxt_file(path) || is_legacy_file(path))
+        throw std::runtime_error(std::string("refusing to overwrite an encrypted ")+what+
+                                 " with plaintext");
+}
 void save_userlist_data(std::string& plaintext,const char *path) {
     ready();
     if(plaintext.empty() || plaintext.size()>MAXDATA)
         throw std::runtime_error("invalid userlist size");
     if(ul_active) {
         if(ul_path!=path) throw std::runtime_error("userlist path changed during encrypted session");
-        // The original plaintext string becomes ciphertext in-place.
-        // Detached AEAD writes the 16-byte tag to the stack; no full-size
-        // ciphertext vector or extra copy is needed.
-        unsigned char header[HDR];
-        unsigned char mac[crypto_aead_xchacha20poly1305_ietf_ABYTES];
-        memcpy(header,ul_header.data(),HDR);
-        randombytes_buf(header+18+crypto_pwhash_SALTBYTES,
-                        crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-        unsigned char *data=reinterpret_cast<unsigned char*>(&plaintext[0]);
-        unsigned long long maclen=0;
-        const int rc=crypto_aead_xchacha20poly1305_ietf_encrypt_detached(
-            data,mac,&maclen,data,plaintext.size(),
-            header,HDR,NULL,header+18+crypto_pwhash_SALTBYTES,ul_key);
-        if(rc!=0 || maclen!=sizeof(mac)) {
-            sodium_memzero(mac,sizeof(mac));
-            sodium_memzero(header,sizeof(header));
-            throw std::runtime_error("userlist encryption failed");
-        }
-        try {
-            atomic_userlist(path,header,sizeof(header),data,plaintext.size(),mac,sizeof(mac));
-        } catch(...) {
-            sodium_memzero(mac,sizeof(mac));
-            sodium_memzero(header,sizeof(header));
-            throw;
-        }
-        sodium_memzero(mac,sizeof(mac));
-        sodium_memzero(header,sizeof(header));
+        session_save_encrypted(plaintext,path,ul_key,ul_header.data());
     } else {
-        const size_t pathlen=strlen(path);
-        if(pathlen>=4 && memcmp(path+pathlen-4,".nxt",4)==0)
-            throw std::runtime_error("refusing to write plaintext userlist into .nxt; explicitly encrypt first");
-        if(is_nxt_file(path) || is_legacy_file(path))
-            throw std::runtime_error("refusing to overwrite an encrypted userlist with plaintext");
-        atomic_userlist(path,reinterpret_cast<const unsigned char*>(plaintext.data()),plaintext.size());
+        plaintext_guard(path,"userlist");
+        atomic_private_write(path,reinterpret_cast<const unsigned char*>(plaintext.data()),plaintext.size());
+    }
+}
+bool config_encrypted_session() { return cfg_active; }
+
+void save_config_data(std::string& plaintext,const char *path) {
+    ready();
+    if(plaintext.empty() || plaintext.size()>MAXDATA)
+        throw std::runtime_error("invalid config size");
+    if(cfg_active) {
+        if(cfg_path!=path) throw std::runtime_error("config path changed during encrypted session");
+        session_save_encrypted(plaintext,path,cfg_key,cfg_header.data());
+    } else {
+        plaintext_guard(path,"config");
+        atomic_private_write(path,reinterpret_cast<const unsigned char*>(plaintext.data()),plaintext.size());
     }
 }
 int userlist_command(int argc,char **argv) {

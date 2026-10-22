@@ -32,6 +32,8 @@ on:
       - 'tests/sodium.c'
       - 'tests/test-nxt-crypto.sh'
       - 'tests/nxt-crypto-cli-test.cpp'
+      - 'tests/cfg-session-test.cpp'
+      - 'tests/test-nxt-cfg-session.sh'
       - '.github/workflows/nxt-config-crypto.yml'
 jobs:
   crypto:
@@ -44,11 +46,14 @@ jobs:
       - name: Build standalone crypto CLI and fixture executables
         run: |
           g++ -std=c++11 -O2 -Wall -Wextra -I. nxt-crypto.cpp nxt-legacy.cpp class-blowfish.cpp tests/nxt-crypto-cli-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-crypto-test
+          g++ -std=c++11 -O2 -Wall -Wextra -I. nxt-crypto.cpp nxt-legacy.cpp class-blowfish.cpp tests/cfg-session-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-cfg-session-test
           for opt in 0 1 2; do
             g++ -std=c++11 -O"$opt" -I. class-blowfish.cpp tests/legacy-fixture.cpp -o "/tmp/old-psotnic-$opt"
           done
       - name: Roundtrip, tamper, overwrite, permission and stdin checks
         run: sh tests/test-nxt-crypto.sh /tmp/nxt-crypto-test
+      - name: Cached-key encrypted .cfg-save, salt unchanged and nonce rotated
+        run: sh tests/test-nxt-cfg-session.sh /tmp/nxt-crypto-test /tmp/nxt-cfg-session-test
       - name: Legacy Blowfish decoding, seed.h, ELF binary extraction and direct NXT migration
         run: sh tests/test-nxt-legacy.sh /tmp/nxt-crypto-test /tmp/old-psotnic-0 /tmp/old-psotnic-1 /tmp/old-psotnic-2
   proxy-protocol:
