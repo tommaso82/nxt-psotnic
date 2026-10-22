@@ -24,6 +24,7 @@
 #include <sodium.h>
 #include <stdexcept>
 #include <string>
+#include <fstream>
 
 flagTable FT[] = {
 	{ 'x',  HAS_X,  7,  X_FLAGS,    "perms",            "can do everything" },
@@ -1795,6 +1796,22 @@ int ul::load(const char *file, const int cypher, const char *key)
             fprintf(stderr,"[-] Refusing malformed or missing NXT userlist %s\n",file);
             exit(1);
         }
+        // Reject binary-looking data even when a damaged NXT header no
+        // longer matches the magic; never treat corrupted encrypted userlists
+        // as a fresh plaintext database.
+        std::ifstream check(file,std::ios::binary);
+        if(!check) return 0;
+        char probe[128];
+        check.read(probe,sizeof probe);
+        const std::streamsize got=check.gcount();
+        for(std::streamsize i=0;i<got;++i) {
+            const unsigned char ch=(unsigned char)probe[i];
+            if(ch==0 || (ch<32 && ch!='\n' && ch!='\r' && ch!='\t') || ch==127) {
+                fprintf(stderr,"[-] Invalid/binary userlist: refusing plaintext fallback: %s\n",file);
+                exit(1);
+            }
+        }
+        check.close();
         inetconn stream;
         if(stream.open(file,O_RDONLY)<0) return 0;
         char line[MAX_LEN];
