@@ -60,13 +60,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y libsodium-dev pkg-config build-essential perl
+        run: sudo apt-get update && sudo apt-get install -y libsodium-dev pkg-config build-essential perl strace
       - name: Compile without asynchronous DNS
         run: |
           perl configure --disable-adns --disable-modules
           make dynamic
       - name: Verify remote target names stay unresolved locally without ADNS
-        run: python3 tests/test-nxt-proxy-integration.py ./bin/psotnic
+        run: NXT_TRACE_PROXY=1 python3 tests/test-nxt-proxy-integration.py ./bin/psotnic
   bot-build:
     runs-on: ubuntu-24.04
     steps:

@@ -50,8 +50,12 @@ def exercise(kind):
                 "proxy-pass testpass\n"
                 "proxy-scope irc\n"
             )
+            command=["stdbuf","-oL","-eL",BIN,str(cfg)]
+            if os.environ.get("NXT_TRACE_PROXY"):
+                command=["strace","-f","-tt","-s","160","-e","trace=network",
+                         "-o",str(Path(folder)/"trace")]+command
             proc = subprocess.Popen(
-                ["stdbuf","-oL","-eL",BIN, str(cfg)], cwd=folder,
+                command, cwd=folder,
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 stdin=subprocess.DEVNULL
             )
@@ -87,6 +91,9 @@ def exercise(kind):
                 out,err=proc.communicate(timeout=4)
                 print("BOT STDERR:\n"+err.decode(errors="replace"),file=sys.stderr)
                 print("BOT STDOUT:\n"+out.decode(errors="replace"),file=sys.stderr)
+                trace=Path(folder)/"trace"
+                if trace.exists():
+                    print("TRACE:\n"+trace.read_text(errors="replace")[-16000:],file=sys.stderr)
                 raise
             finally:
                 if proc.poll() is None: proc.kill()
