@@ -333,10 +333,21 @@ int rmdirext(const char *dir)
 	return 0;
 }
 
+// Use the exact same NXT title in the short help and full version banner.
+static void print_nxt_banner_title()
+{
+    const char *no_color = getenv("NO_COLOR");
+    const bool colors = isatty(STDOUT_FILENO) && (!no_color || !*no_color);
+    printf("%s>>==[ %s %s ]==<<%s\n",
+           colors ? "\033[36m" : "", S_BOTNAME, NXT_VERSION,
+           colors ? "\033[0m" : "");
+}
+
 // Small, dependency-free CLI help; do not initialize the bot for help requests.
 static void print_nxt_short_help(const char *exe)
 {
-    printf("NXT-Psotnic - lightweight IRC bot (based on gay-psotnic)\n\n");
+    print_nxt_banner_title();
+    putchar('\n');
     printf("Usage: %s [OPTIONS] CONFIG_FILE\n\n", exe);
     puts("Quick start:");
     printf("  %s -n                   Create a new bot configuration\n", exe);
@@ -891,7 +902,6 @@ void propaganda()
     const char *no_color = getenv("NO_COLOR");
     const bool colors = isatty(STDOUT_FILENO) &&
                         (!no_color || !*no_color);
-    const char *cyan = colors ? "\033[36m" : "";
     const char *gray = colors ? "\033[90m" : "";
     const char *reset = colors ? "\033[0m" : "";
 #ifdef HAVE_IPV6
@@ -900,7 +910,7 @@ void propaganda()
     const char *ip = "IPv4";
 #endif
 
-    printf("%s>>==[ %s %s ]==<<%s\n", cyan, S_BOTNAME, NXT_VERSION, reset);
+    print_nxt_banner_title();
     printf("%s |--%s based on gay-psotnic %s\n", gray, reset, S_VERSION);
     printf("%s |--%s %s / rev: %s / build: %s\n", gray, reset,
            ip, SVN_REVISION, __DATE__);

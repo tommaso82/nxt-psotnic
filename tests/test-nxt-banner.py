@@ -14,14 +14,14 @@ def run_plain(*args):
                             stderr=subprocess.PIPE, check=True, timeout=10)
     return result.stdout
 
-def run_tty(extra_env=None):
+def run_tty(extra_env=None, args=("-v",)):
     master, slave = pty.openpty()
     env = os.environ.copy()
     env.pop("NO_COLOR", None)
     if extra_env:
         env.update(extra_env)
     try:
-        proc = subprocess.Popen([bot, "-v"], stdout=slave, stderr=slave,
+        proc = subprocess.Popen([bot, *args], stdout=slave, stderr=slave,
                                 env=env)
         os.close(slave)
         slave = -1
@@ -64,10 +64,20 @@ assert re.search(r"build: [A-Z][a-z]{2} +[ 0-9][0-9] 20[0-9]{2}$",
                  lines[2]), "Expected actual C/C++ __DATE__ build date"
 assert not b"gay-psotnic, version" in plain
 
+quick = run_plain()
+quick_lines = quick.decode("ascii").splitlines()
+assert quick_lines[0] == lines[0], "The no-args screen must reuse the version title"
+assert "Quick start:" in quick_lines, "The no-args screen must remain a short guide"
+assert len(quick_lines) <= 12, "The no-args screen must stay compact"
+assert not ansi.search(quick), "Redirected quick help must not contain ANSI codes"
+
 colored = run_tty()
 assert ansi.search(colored), "ANSI cyan/gray is expected on a TTY"
 assert ansi.sub(b"", colored) == plain, "Colored and plain text must be identical"
+quick_tty = run_tty(args=())
+assert ansi.search(quick_tty), "The short guide title should have TTY colors"
+assert ansi.sub(b"", quick_tty) == quick, "TTY short guide must match plain output"
 disabled = run_tty({"NO_COLOR": "1"})
 assert not ansi.search(disabled), "NO_COLOR must disable ANSI codes"
 assert disabled == plain, "NO_COLOR TTY output must match redirected version"
-print("NXT_BANNER_OK lines=5 history=preserved ansi=tty-only no_color=honored")
+print("NXT_BANNER_OK lines=5 quick_title=same-as-version ansi=tty-only no_color=honored")
