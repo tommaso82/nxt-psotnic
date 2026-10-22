@@ -51,7 +51,7 @@ def exercise(kind):
                 "proxy-scope irc\n"
             )
             proc = subprocess.Popen(
-                [BIN, str(cfg)], cwd=folder,
+                ["stdbuf","-oL","-eL",BIN, str(cfg)], cwd=folder,
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 stdin=subprocess.DEVNULL
             )
@@ -83,13 +83,13 @@ def exercise(kind):
                     print(f"LIVE_PROXY_OK kind={kind} host=irc.example.invalid port=6667 "
                           f"registration_after_tunnel=yes", flush=True)
             except Exception:
-                if proc.poll() is not None:
-                    out, err=proc.communicate(timeout=2)
-                    print("BOT STDERR:\n"+err.decode(errors="replace"),file=sys.stderr)
-                    print("BOT STDOUT:\n"+out.decode(errors="replace"),file=sys.stderr)
+                if proc.poll() is None: proc.kill()
+                out,err=proc.communicate(timeout=4)
+                print("BOT STDERR:\n"+err.decode(errors="replace"),file=sys.stderr)
+                print("BOT STDOUT:\n"+out.decode(errors="replace"),file=sys.stderr)
                 raise
             finally:
-                proc.kill() if proc.poll() is None else None
+                if proc.poll() is None: proc.kill()
                 try: proc.communicate(timeout=4)
                 except subprocess.TimeoutExpired: proc.kill();proc.wait()
 
@@ -145,7 +145,7 @@ def exercise_both_channels():
                         results.append((host,port))
                 except Exception as exc:
                     failures.append(repr(exc))
-            proc=subprocess.Popen([BIN,str(cfg)],cwd=folder,stdin=subprocess.DEVNULL,
+            proc=subprocess.Popen(["stdbuf","-oL","-eL",BIN,str(cfg)],cwd=folder,stdin=subprocess.DEVNULL,
                                   stdout=subprocess.PIPE,stderr=subprocess.PIPE)
             threads=[]
             try:
