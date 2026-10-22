@@ -24,6 +24,9 @@
 #include <sodium.h>
 #include <stdexcept>
 #include <string>
+#ifdef __GLIBC__
+#include <malloc.h>
+#endif
 #include <fstream>
 
 flagTable FT[] = {
@@ -1751,10 +1754,22 @@ bool ul::save(const char *file, const int cypher, const char *key)
 
         nxtcrypto::save_userlist_data(plain,file);
         if(!plain.empty()) sodium_memzero(&plain[0],plain.size());
+        plain.clear();
+        plain.shrink_to_fit();
+#ifdef __GLIBC__
+        // Return no-longer-needed pages to the OS after sensitive data is
+        // wiped. Test this against the filesystem latency in the benchmark.
+        malloc_trim(0);
+#endif
         nextSave=0;
         return true;
     } catch(const std::exception& e) {
         if(!plain.empty()) sodium_memzero(&plain[0],plain.size());
+        plain.clear();
+        plain.shrink_to_fit();
+#ifdef __GLIBC__
+        malloc_trim(0);
+#endif
         fprintf(stderr,"[-] Cannot save userlist %s: %s\n",file,e.what());
         nextSave=NOW+SAVEDELAY;
         return false;
