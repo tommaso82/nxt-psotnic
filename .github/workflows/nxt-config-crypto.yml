@@ -138,7 +138,7 @@ jobs:
           fi
           ./bin/psotnic -v > /tmp/nxt-v.txt
           ./bin/psotnic --version > /tmp/nxt-version.txt
-          grep -q 'NXT-Psotnic, version' /tmp/nxt-v.txt
+          grep -Fq '>>==[ NXT-Psotnic 0.1.0-dev ]==<<' /tmp/nxt-v.txt
           cmp /tmp/nxt-v.txt /tmp/nxt-version.txt
           if ./bin/psotnic -not-an-option > /tmp/nxt-badout 2>&1; then
             echo 'Unknown option unexpectedly succeeded'; exit 1
