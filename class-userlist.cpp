@@ -1716,8 +1716,17 @@ bool ul::save(const char *file, const int cypher, const char *key)
     }
 
     std::string plain;
-    inetconn stream;
-    // The serializer writes directly to RAM; no dummy file descriptor.
+    try {
+        // Reuse the previous on-disk size as a capacity estimate. This
+        // prevents geometric reallocations (and associated RSS spikes)
+        // during ordinary autosaves without retaining a permanent buffer.
+        struct stat previous;
+        if(::stat(file,&previous)==0 && S_ISREG(previous.st_mode) &&
+           previous.st_size>0 && previous.st_size<=8*1024*1024) {
+            plain.reserve(static_cast<size_t>(previous.st_size));
+        }
+        inetconn stream;
+        // The serializer writes directly to RAM; no dummy file descriptor.
     stream.capture=&plain;
     // open(file, ...) used to set STATUS_FILE in the classic serializer.
     // Keep the same local-file metadata (createdBy, hostBy, history, info).
@@ -1738,9 +1747,8 @@ bool ul::save(const char *file, const int cypher, const char *key)
     snprintf(snbuf,sizeof snbuf,"%llu",SN);
     stream.send("%s %s",S_SN,snbuf);
     stream.send("%s %ld",S_TIMESTAMP,userlist.timestamp);
-    stream.capture=NULL;
+        stream.capture=NULL;
 
-    try {
         nxtcrypto::save_userlist_data(plain,file);
         if(!plain.empty()) sodium_memzero(&plain[0],plain.size());
         nextSave=0;
