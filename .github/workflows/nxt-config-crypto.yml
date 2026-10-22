@@ -11,6 +11,7 @@ on:
       - 'class-ent.cpp'
       - 'class-ent.h'
       - 'tests/test-nxt-proxy.cpp'
+      - 'tests/test-nxt-proxy-integration.py'
       - 'class-userlist.cpp'
       - 'class-inet.cpp'
       - 'main.cpp'
@@ -82,6 +83,9 @@ jobs:
           ./bin/psotnic config import /tmp/legacy-smoke-old.cfg --binary /tmp/legacy-smoke-fixture --output /tmp/legacy-smoke-new.nxt --to nxt --password 'synthetic CI password for smoke test'
           ./bin/psotnic config decrypt /tmp/legacy-smoke-new.nxt --output /tmp/legacy-smoke-recovered.cfg --password 'synthetic CI password for smoke test'
           cmp /tmp/legacy-smoke-preview.cfg /tmp/legacy-smoke-recovered.cfg
+
+      - name: Exercise real NXT binary through local authenticated SOCKS5 and HTTP CONNECT
+        run: python3 tests/test-nxt-proxy-integration.py ./bin/psotnic
 
   real-classic-binary:
     name: Recover seed from real upstream gay-psotnic
