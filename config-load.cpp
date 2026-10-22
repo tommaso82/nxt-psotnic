@@ -111,7 +111,7 @@ void CONFIG::load(const char *file, bool decrypted)
     const bool proxied=strcmp(proxy_type,"none")!=0;
     const bool proxy_hub=proxied && !strcmp(proxy_scope,"irc,hub");
     const auto resolve_direct=[&](entHost &host) {
-        if(host.isDefault() || !(host.getConnectionStringType() & entHost::domain))return;
+        if(host.isDefault() || !(host.getConnectionStringType(host.getValue()) & entHost::domain))return;
         const std::string original=host.getValue();
         options::event *event=host.setValue("host",original.c_str());
         if(!event || !event->ok) {
