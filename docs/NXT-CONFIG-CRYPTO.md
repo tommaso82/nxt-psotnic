@@ -53,8 +53,8 @@ The file must validate plausibly as a config before any output is written.
 Because legacy Blowfish is unauthenticated, plausibility checks are not a
 cryptographic guarantee. `--seed-file` is preferred whenever available.
 
-Existing `.ul` files are unchanged. The importer currently supports the
-legacy *configuration* v3 format only, not userlists or old config versions.
+Userlist support now has its own import path and encrypted at-rest autosave.
+See docs/USERLIST-CRYPTO.md for commands and compatibility details.
 
 ## Algorithm and format
 
@@ -71,7 +71,7 @@ Existing userlist `.ul` encryption is unaffected.
 
 ## Scope / limits
 
-**SOCKS5/HTTP CONNECT and legacy userlist import are NOT included.**
+**SOCKS5/HTTP CONNECT are NOT included.**
 Full bot compilation and integration tests are required before merge.
 Never put `.cfg`, `.nxt`, `.pass`, `.ul` or generated seed files in Git.
 When a systemd service is started unattended, provision the password through a
