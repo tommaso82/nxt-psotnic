@@ -57,7 +57,7 @@ static void http(bool auth,bool bad=false,bool ipv6=false) {
     assert(s.step(false,true)==0);
     auto request=readpkt(pair[1]);
     assert(request.find(ipv6?"CONNECT [2001:db8::1]:6667 HTTP/1.1":"CONNECT irc.example.test:6667 HTTP/1.1")==0);
-    assert(request.find("Proxy-Authorization: Basic dXNlcjpwYXNzd29yZA==")!=std::string::npos == auth);
+    assert((request.find("Proxy-Authorization: Basic dXNlcjpwYXNzd29yZA==")!=std::string::npos)==auth);
     assert(request.find("\r\n\r\n")==request.size()-4);
     reply(pair[1],"HTTP/1.1 ");
     assert(s.step(true,false)==0);
