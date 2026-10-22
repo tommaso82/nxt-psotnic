@@ -23,19 +23,19 @@ def make_config(folder, port):
 
 def expect_irc_registration(listener):
     conn, _ = listener.accept()
-    with conn:
-        conn.settimeout(9)
-        buf = bytearray()
-        deadline = time.monotonic() + 9
-        while time.monotonic() < deadline and b"USER " not in buf:
-            chunk = conn.recv(4096)
-            if not chunk:
-                break
-            buf.extend(chunk)
-        registration = bytes(buf)
-        assert b"CAP LS" in registration, registration
-        assert b"NICK nxtbot" in registration, registration
-        assert b"USER " in registration, registration
+    conn.settimeout(9)
+    buf = bytearray()
+    deadline = time.monotonic() + 9
+    while time.monotonic() < deadline and b"USER " not in buf:
+        chunk = conn.recv(4096)
+        if not chunk:
+            break
+        buf.extend(chunk)
+    registration = bytes(buf)
+    assert b"CAP LS" in registration, registration
+    assert b"NICK nxtbot" in registration, registration
+    assert b"USER " in registration, registration
+    return conn
 
 def check_foreground(listener, folder):
     proc = subprocess.Popen(
@@ -43,14 +43,22 @@ def check_foreground(listener, folder):
         cwd=folder, stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
+    conn = None
+    observed_returncode = None
     try:
-        expect_irc_registration(listener)
+        conn = expect_irc_registration(listener)
         time.sleep(0.3)
-        assert proc.poll() is None, "-d incorrectly exited or forked"
+        observed_returncode = proc.poll()
     finally:
         if proc.poll() is None:
             proc.kill()
         out, err = proc.communicate(timeout=4)
+        if conn is not None:
+            conn.close()
+    assert observed_returncode is None, (
+        "-d incorrectly exited or forked (rc=%r)\nstdout:\n%s\nstderr:\n%s"
+        % (observed_returncode, out.decode(errors="replace"), err.decode(errors="replace"))
+    )
     assert b"-d: running in foreground" in out, out
     assert b"Config loaded" in out, (out, err)
     print("NXT_FOREGROUND_OK -d accepted, live IRC registration, process attached")
@@ -61,10 +69,11 @@ def check_daemon(listener, folder):
         stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
     pid = None
+    conn = None
     try:
         parent.wait(timeout=9)
         assert parent.returncode == 0, "Daemon parent returned nonzero"
-        expect_irc_registration(listener)
+        conn = expect_irc_registration(listener)
         pidfile = Path(folder) / "pid.nxtbot"
         deadline = time.monotonic() + 3
         while not pidfile.exists() and time.monotonic() < deadline:
@@ -75,6 +84,8 @@ def check_daemon(listener, folder):
         os.kill(pid, 0)
         print("NXT_DAEMON_OK default startup forks, child performs IRC registration")
     finally:
+        if conn is not None:
+            conn.close()
         if parent.poll() is None:
             parent.kill()
         parent.communicate(timeout=4)
