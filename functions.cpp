@@ -401,6 +401,7 @@ static void print_nxt_help(const char *exe)
     puts("\nGeneral options:");
     puts("  -h, --help                    Full help");
     puts("  -v, --version                 Version and build information");
+    puts("  -d                            Run in foreground (debug logs if compiled with HAVE_DEBUG)");
     puts("  -n                            Create new configuration interactively");
     puts("  -ne                           Create configuration (expert mode)");
     puts("  -a FILE [FILE ...]            Add crontab entries (legacy action)");
@@ -507,8 +508,13 @@ void parse_cmdline(int argc, char *argv[])
 */			
 			exit(0);
 		}
+		else if(!strcmp(argv[i], "-d")) {
+            nxt_debug_mode = true;
 #ifdef HAVE_DEBUG
-		else if(!strcmp(argv[i], "-d")) debug = 1;
+            debug = 1;
+#endif
+        }
+#ifdef HAVE_DEBUG
 		/*else if(!strcmp(argv[i], "-u"))
 		{
 			psotget.doUpdate(argv[i] ? argv[i+1] : "");

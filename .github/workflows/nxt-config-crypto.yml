@@ -12,6 +12,8 @@ on:
       - 'class-ent.h'
       - 'tests/test-nxt-proxy.cpp'
       - 'tests/test-nxt-proxy-integration.py'
+      - 'tests/test-nxt-debug-foreground.py'
+      - 'global-var.h'
       - 'class-userlist.cpp'
       - 'class-inet.cpp'
       - 'main.cpp'
@@ -168,6 +170,8 @@ jobs:
         run: python3 tests/test-nxt-banner.py ./bin/psotnic
       - name: Exercise real NXT binary through local authenticated SOCKS5 and HTTP CONNECT
         run: python3 tests/test-nxt-proxy-integration.py ./bin/psotnic
+      - name: Real foreground -d and classic background end-to-end regression
+        run: python3 tests/test-nxt-debug-foreground.py ./bin/psotnic
 
   real-classic-binary:
     name: Recover seed from real upstream gay-psotnic
