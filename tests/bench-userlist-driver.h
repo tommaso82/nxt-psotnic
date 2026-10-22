@@ -16,7 +16,7 @@
 #include <cstring>
 
 #ifdef NXT_BENCH_NEW
-#include "nxt-crypto.h"
+#include "../nxt-crypto.h"
 #include <sodium.h>
 #endif
 
