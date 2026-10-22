@@ -23,6 +23,7 @@
 #include "nxt-crypto.h"
 #include <sodium.h>
 #include <sstream>
+#include <unistd.h>  // isatty(STDOUT_FILENO)
 
 #define __itoa_num		16
 char __itoa[16][16];
@@ -885,17 +886,27 @@ int doConnect6(const char *server, int port, const char *vhost, int noblock)
 
 void propaganda()
 {
-	printf("\n");
+    // Five compact ASCII lines. Colors only on interactive terminals; keep
+    // piping to files/logs/scripts completely free from ANSI escape codes.
+    const char *no_color = getenv("NO_COLOR");
+    const bool colors = isatty(STDOUT_FILENO) &&
+                        (!no_color || !*no_color);
+    const char *cyan = colors ? "\033[36m" : "";
+    const char *gray = colors ? "\033[90m" : "";
+    const char *reset = colors ? "\033[0m" : "";
 #ifdef HAVE_IPV6
-	printf("%s, version %s-ipv6 (rev: %s, build: %s %s)", S_BOTNAME, S_VERSION, SVN_REVISION, __DATE__, __TIME__);
+    const char *ip = "IPv6";
 #else
-	printf("%s, version %s (rev: %s build: %s %s)", S_BOTNAME, S_VERSION, SVN_REVISION, __DATE__, __TIME__);
+    const char *ip = "IPv4";
 #endif
-	printf("\n");
-	printf("Copyright (C) 2003-2007 Grzegorz Rusin <grusin@gmail.com>\n");
-	printf("Copyright (C) 2009 psotnic.com development team\n");
-    printf("NXT-Psotnic fork - original gay-psotnic 0.1.1 codebase\n");
-	printf("\n");
+
+    printf("%s>>==[ %s %s ]==<<%s\n", cyan, S_BOTNAME, NXT_VERSION, reset);
+    printf("%s |--%s based on gay-psotnic %s\n", gray, reset, S_VERSION);
+    printf("%s |--%s %s / rev: %s / build: %s\n", gray, reset,
+           ip, SVN_REVISION, __DATE__);
+    printf("%s |--%s (C) 2003-2007 Grzegorz Rusin <grusin@gmail.com>\n",
+           gray, reset);
+    printf("%s `--%s (C) 2009 psotnic.com development team\n", gray, reset);
 }
 
 bool extendhost(const char *host, char *buf, unsigned int len)

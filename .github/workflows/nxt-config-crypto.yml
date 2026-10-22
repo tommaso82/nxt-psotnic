@@ -23,6 +23,8 @@ on:
       - 'class-options.cpp'
       - 'classes.h'
       - 'functions.cpp'
+      - 'defines.h'
+      - 'tests/test-nxt-banner.py'
       - 'configure'
       - 'tests/test.pm'
       - 'tests/sodium.c'
@@ -145,6 +147,8 @@ jobs:
           if grep -q 'Loading plaintext config' /tmp/nxt-badout; then
             echo 'Unknown option was incorrectly treated as config'; exit 1
           fi
+      - name: Verify compact startup banner, original credits and ANSI safety
+        run: python3 tests/test-nxt-banner.py ./bin/psotnic
       - name: Exercise real NXT binary through local authenticated SOCKS5 and HTTP CONNECT
         run: python3 tests/test-nxt-proxy-integration.py ./bin/psotnic
 
