@@ -130,7 +130,8 @@ jobs:
           ./bin/psotnic help > /tmp/nxt-help-alias.txt
           cmp /tmp/nxt-help.txt /tmp/nxt-long-help.txt
           cmp /tmp/nxt-help.txt /tmp/nxt-help-alias.txt
-          test "$(head -n 1 /tmp/nxt-quick.txt)" = '>>==[ NXT-Psotnic 0.1.0-dev ]==<<'
+          test -z "$(head -n 1 /tmp/nxt-quick.txt)"
+          test "$(sed -n '2p' /tmp/nxt-quick.txt)" = ':: nxt-psotnic :: 0.1.0-dev'
           grep -q 'Quick start:' /tmp/nxt-quick.txt
           grep -q 'Full guide' /tmp/nxt-quick.txt
           if [ "$(wc -l < /tmp/nxt-quick.txt)" -gt 12 ]; then
@@ -163,9 +164,9 @@ jobs:
           fi
           ./bin/psotnic -v > /tmp/nxt-v.txt
           ./bin/psotnic --version > /tmp/nxt-version.txt
-          grep -Fq '>>==[ NXT-Psotnic 0.1.0-dev ]==<<' /tmp/nxt-v.txt
+          grep -Fxq ':: nxt-psotnic :: 0.1.0-dev' /tmp/nxt-v.txt
           cmp /tmp/nxt-v.txt /tmp/nxt-version.txt
-          test "$(head -n 1 /tmp/nxt-quick.txt)" = "$(head -n 1 /tmp/nxt-v.txt)"
+          test "$(sed -n '2p' /tmp/nxt-quick.txt)" = "$(sed -n '2p' /tmp/nxt-v.txt)"
           if ./bin/psotnic -not-an-option > /tmp/nxt-badout 2>&1; then
             echo 'Unknown option unexpectedly succeeded'; exit 1
           fi

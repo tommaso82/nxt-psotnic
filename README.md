@@ -5,9 +5,9 @@ the historical IRC and botnet behavior, and adds encrypted config/userlist
 files and optional global SOCKS5 / HTTP CONNECT for outgoing connections.
 
 The executable remains named **psotnic** for compatibility with existing scripts.
-The startup/version banner displays NXT-Psotnic 0.1.0-dev and credits the
-original gay-psotnic 0.1.1 release. Colors are limited to interactive
-terminals (set NO_COLOR=1 to disable); redirected output is plain ASCII.
+The startup/version banner displays `:: nxt-psotnic :: 0.1.0-dev` and credits
+the original gay-psotnic 0.1.1 release. Only the bot name is cyan on
+interactive terminals (set NO_COLOR=1 to disable); redirected output is plain ASCII.
 Run **./bin/psotnic** without arguments for a short getting-started summary,
 **./bin/psotnic -h** or **--help** for the full guide, or
 **./bin/psotnic config --help** / **userlist --help** for detailed file commands.

@@ -338,9 +338,9 @@ static void print_nxt_banner_title()
 {
     const char *no_color = getenv("NO_COLOR");
     const bool colors = isatty(STDOUT_FILENO) && (!no_color || !*no_color);
-    printf("%s>>==[ %s %s ]==<<%s\n",
-           colors ? "\033[36m" : "", S_BOTNAME, NXT_VERSION,
-           colors ? "\033[0m" : "");
+    printf("\n:: %s%s%s :: %s\n",
+           colors ? "\033[36m" : "", "nxt-psotnic",
+           colors ? "\033[0m" : "", NXT_VERSION);
 }
 
 // Small, dependency-free CLI help; do not initialize the bot for help requests.
@@ -902,8 +902,8 @@ int doConnect6(const char *server, int port, const char *vhost, int noblock)
 
 void propaganda()
 {
-    // Five compact ASCII lines. Colors only on interactive terminals; keep
-    // piping to files/logs/scripts completely free from ANSI escape codes.
+    // Five informational ASCII lines with a leading and trailing blank line.
+    // Colors only on interactive terminals; redirected output stays ANSI-free.
     const char *no_color = getenv("NO_COLOR");
     const bool colors = isatty(STDOUT_FILENO) &&
                         (!no_color || !*no_color);
@@ -922,6 +922,7 @@ void propaganda()
     printf("%s |--%s (C) 2003-2007 Grzegorz Rusin <grusin@gmail.com>\n",
            gray, reset);
     printf("%s `--%s (C) 2009 psotnic.com development team\n", gray, reset);
+    putchar('\n');
 }
 
 bool extendhost(const char *host, char *buf, unsigned int len)
