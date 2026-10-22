@@ -12,7 +12,7 @@ int main(int argc,char **argv) {
         std::string old=nxtcrypto::load_userlist_data(argv[1]);
         if(old.find("21 42\n")==std::string::npos ||
            old.find("82 1700000000\n")==std::string::npos) return 3;
-        const std::string updated=old+"# atomic autosave verified\n";
+        std::string updated=old+"# atomic autosave verified\n";
         nxtcrypto::save_userlist_data(updated,argv[1]);
         nxtcrypto::finish_bootstrap();
         if(!old.empty()) sodium_memzero(&old[0],old.size());
