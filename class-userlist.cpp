@@ -968,11 +968,12 @@ void ul::autoSave(int notice)
 {
 	if(nextSave && config.userlist_file && nextSave <= NOW)
 	{
-		if(!save(config.userlist_file)) {
+		// Keep the original flag-recheck cadence even when disk I/O fails.
+		// Unlike legacy Psotnic, retain a pending save for a retry.
+		if(!save(config.userlist_file))
 			nextSave = NOW + SAVEDELAY;
-			return;
-		}
-		nextSave = 0;
+		else
+			nextSave = 0;
 //		if(config.bottype == BOT_MAIN && notice)
 //			net.send(HAS_N, "Autosaving userlist");
 		ME.recheckFlags();
