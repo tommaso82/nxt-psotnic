@@ -1717,10 +1717,7 @@ bool ul::save(const char *file, const int cypher, const char *key)
 
     std::string plain;
     inetconn stream;
-    if(stream.open("/dev/null",O_WRONLY)<0) {
-        fprintf(stderr,"[-] Cannot initialize in-memory userlist serializer\n");
-        return false;
-    }
+    // The serializer writes directly to RAM; no dummy file descriptor.
     stream.capture=&plain;
 
     // Preserve the old userlist command protocol and its ordering.

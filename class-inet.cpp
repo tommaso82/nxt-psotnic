@@ -599,6 +599,15 @@ int inetconn::send(const char *lst, ...)
         vsnprintf(buf, MAX_LEN, lst, list);
         va_end(list);
 
+        // In-memory userlist serializer: same single-line wire format as the
+        // original send() path, without /dev/null or per-record malloc/free.
+        if(capture && !(status & STATUS_REDIR)) {
+            const size_t len=strlen(buf);
+            capture->append(buf,len);
+            capture->push_back('\n');
+            return static_cast<int>(len+1);
+        }
+
 	inetconn *conn = status & STATUS_REDIR ? net.findRedirConn(this) : this;
 
 	if(!(status & STATUS_REDIR) && !isBot() && isRegUser())
@@ -676,15 +685,6 @@ int inetconn::send(const char *lst, ...)
 		p[size-3] = '\n';
 		p[size-2] = '\0';
 		size -= 2;
-	}
-
-	// Private userlist serialization: capture complete lines in RAM, never
-	// send plaintext over a pipe, socket or temporary file.
-	if(conn->capture)
-	{
-		conn->capture->append(p, size);
-		free(p);
-		return size;
 	}
 
 	if(conn->blowfish)

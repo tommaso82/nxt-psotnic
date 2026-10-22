@@ -270,7 +270,13 @@ std::string load_userlist_data(const char *path) {
 }
 // Atomic replacement: temporary userlists are private; encrypted userlists
 // are NEVER written to disk as plaintext, even during an autosave.
-void atomic_userlist(const char *target,const unsigned char *data,size_t size) {
+// Atomic userlist writer for up to three sequential spans.
+// Writing the header, ciphertext and detached tag separately avoids a second
+// full-size buffer and preserves the existing NXTCRYPT wire format.
+void atomic_userlist(const char *target,
+                     const unsigned char *part1,size_t len1,
+                     const unsigned char *part2=NULL,size_t len2=0,
+                     const unsigned char *part3=NULL,size_t len3=0) {
     struct stat st;
     const int stat_result=lstat(target,&st);
     if(stat_result==0 && (!S_ISREG(st.st_mode) || st.st_uid!=geteuid()))
@@ -285,12 +291,17 @@ void atomic_userlist(const char *target,const unsigned char *data,size_t size) {
     bool renamed=false;
     try {
         if(fchmod(fd,0600)!=0) throw std::runtime_error("cannot set userlist permissions");
-        size_t pos=0;
-        while(pos<size) {
-            ssize_t n=write(fd,data+pos,size-pos);
-            if(n<0 && errno==EINTR) continue;
-            if(n<=0) throw std::runtime_error("userlist write failed");
-            pos+=(size_t)n;
+        const unsigned char *parts[3]={part1,part2,part3};
+        const size_t lengths[3]={len1,len2,len3};
+        for(unsigned int i=0;i<3;++i) {
+            size_t pos=0;
+            if(lengths[i] && !parts[i]) throw std::runtime_error("missing userlist data");
+            while(pos<lengths[i]) {
+                ssize_t n=write(fd,parts[i]+pos,lengths[i]-pos);
+                if(n<0 && errno==EINTR) continue;
+                if(n<=0) throw std::runtime_error("userlist write failed");
+                pos+=(size_t)n;
+            }
         }
         if(fsync(fd)!=0) throw std::runtime_error("userlist fsync failed");
         if(close(fd)!=0) {fd=-1;throw std::runtime_error("userlist close failed");}
@@ -303,32 +314,47 @@ void atomic_userlist(const char *target,const unsigned char *data,size_t size) {
         int dir=open(folder.c_str(),O_RDONLY|O_CLOEXEC|O_DIRECTORY);
         if(dir>=0) {fsync(dir);close(dir);}
     } catch(...) {
-        if(fd>=0)close(fd);
-        if(!renamed)unlink(name.data());
+        if(fd>=0) close(fd);
+        if(!renamed) unlink(name.data());
         throw;
     }
 }
-void save_userlist_data(const std::string& plaintext,const char *path) {
+void save_userlist_data(std::string& plaintext,const char *path) {
     ready();
     if(plaintext.empty() || plaintext.size()>MAXDATA)
         throw std::runtime_error("invalid userlist size");
     if(ul_active) {
         if(ul_path!=path) throw std::runtime_error("userlist path changed during encrypted session");
-        std::vector<unsigned char> out(HDR+plaintext.size()+crypto_aead_xchacha20poly1305_ietf_ABYTES);
-        memcpy(out.data(),ul_header.data(),HDR);
-        randombytes_buf(out.data()+18+crypto_pwhash_SALTBYTES,
+        // The original plaintext string becomes ciphertext in-place.
+        // Detached AEAD writes the 16-byte tag to the stack; no full-size
+        // ciphertext vector or extra copy is needed.
+        unsigned char header[HDR];
+        unsigned char mac[crypto_aead_xchacha20poly1305_ietf_ABYTES];
+        memcpy(header,ul_header.data(),HDR);
+        randombytes_buf(header+18+crypto_pwhash_SALTBYTES,
                         crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-        unsigned long long length=0;
-        int rc=crypto_aead_xchacha20poly1305_ietf_encrypt(
-            out.data()+HDR,&length,reinterpret_cast<const unsigned char*>(plaintext.data()),plaintext.size(),
-            out.data(),HDR,NULL,out.data()+18+crypto_pwhash_SALTBYTES,ul_key);
-        if(rc!=0) {wipe(out);throw std::runtime_error("userlist encryption failed");}
-        out.resize(HDR+(size_t)length);
-        try { atomic_userlist(path,out.data(),out.size());wipe(out); }
-        catch(...) {wipe(out);throw;}
+        unsigned char *data=reinterpret_cast<unsigned char*>(&plaintext[0]);
+        unsigned long long maclen=0;
+        const int rc=crypto_aead_xchacha20poly1305_ietf_encrypt_detached(
+            data,mac,&maclen,data,plaintext.size(),
+            header,HDR,NULL,header+18+crypto_pwhash_SALTBYTES,ul_key);
+        if(rc!=0 || maclen!=sizeof(mac)) {
+            sodium_memzero(mac,sizeof(mac));
+            sodium_memzero(header,sizeof(header));
+            throw std::runtime_error("userlist encryption failed");
+        }
+        try {
+            atomic_userlist(path,header,sizeof(header),data,plaintext.size(),mac,sizeof(mac));
+        } catch(...) {
+            sodium_memzero(mac,sizeof(mac));
+            sodium_memzero(header,sizeof(header));
+            throw;
+        }
+        sodium_memzero(mac,sizeof(mac));
+        sodium_memzero(header,sizeof(header));
     } else {
-        std::string target(path);
-        if(target.size()>=4 && target.substr(target.size()-4)==".nxt")
+        const size_t pathlen=strlen(path);
+        if(pathlen>=4 && memcmp(path+pathlen-4,".nxt",4)==0)
             throw std::runtime_error("refusing to write plaintext userlist into .nxt; explicitly encrypt first");
         if(is_nxt_file(path) || is_legacy_file(path))
             throw std::runtime_error("refusing to overwrite an encrypted userlist with plaintext");
