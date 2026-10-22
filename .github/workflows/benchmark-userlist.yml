@@ -34,6 +34,8 @@ jobs:
           (cd classic && perl configure --disable-modules && make dynamic)
           perl configure --disable-modules
           make dynamic
+      # Keep this workflow runnable for each optimization commit and collect
+      # a same-runner before/after comparison against original gay-psotnic.
       - name: Benchmark genuine ul::save with 100/1000/10000 handles
         shell: bash
         run: |
