@@ -405,7 +405,6 @@ static void print_nxt_help(const char *exe)
     puts("  -ne                           Create configuration (expert mode)");
     puts("  -a FILE [FILE ...]            Add crontab entries (legacy action)");
 #ifdef HAVE_DEBUG
-    puts("  -d                            Enable debug output (debug builds)");
     puts("  -T                            Legacy decrypted-config debug flag");
 #endif
     puts("\nStartup password options (for encrypted configs):");

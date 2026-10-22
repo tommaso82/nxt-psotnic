@@ -71,6 +71,22 @@ jobs:
           make dynamic
       - name: Verify remote target names stay unresolved locally without ADNS
         run: python3 tests/test-nxt-proxy-integration.py ./bin/psotnic
+  debug-build:
+    name: Debug build - historical -d and real IRC smoke test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsodium-dev build-essential perl
+      - name: Compile HAVE_DEBUG binary
+        run: |
+          perl configure --disable-modules
+          make debug
+      - name: Verify debug-only CLI and run live loopback IRC tests
+        run: |
+          ./bin/psotnic -h | grep -q 'Legacy decrypted-config debug flag'
+          python3 tests/test-nxt-debug-foreground.py ./bin/psotnic
+
   bot-build:
     runs-on: ubuntu-24.04
     steps:

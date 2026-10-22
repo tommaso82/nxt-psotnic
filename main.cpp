@@ -45,6 +45,8 @@ int hostNotify;
 int stopPsotnic = 0;
 bool stopParsing = false;
 bool updateNotify = false;
+// -d works in every build; the additional DEBUG() traces still require HAVE_DEBUG.
+bool nxt_debug_mode = false;
 
 #ifdef HAVE_DEBUG
 int debug;
@@ -178,11 +180,16 @@ int main(int argc, char *argv[])
 
 	nxtcrypto::finish_bootstrap();
 
+    if(nxt_debug_mode) {
 #ifdef HAVE_DEBUG
-	if(!debug) lurk();
+        printf("[*] -d: running in foreground with debug tracing enabled\n");
 #else
-	lurk();
+        printf("[*] -d: running in foreground (verbose traces require make debug)\n");
 #endif
+        fflush(stdout);
+    } else {
+        lurk(); // Still honors the existing dontfork setting in the config.
+    }
 
 #ifdef HAVE_ADNS_PTHREAD
         resolver = new adns_pthread(config.resolve_threads);

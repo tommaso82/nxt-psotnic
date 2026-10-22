@@ -41,7 +41,13 @@ Start using the **actual filename** chosen in the wizard:
 
     ./bin/psotnic mybot.cfg
 
-To see startup logs rather than forking, set 'dontfork ON' in the config.
+To run in the foreground **without modifying the config**, use `./bin/psotnic -d mybot.cfg`.
+The `-d` switch works in both regular (`make dynamic`) and debug (`make debug`)
+builds. Both keep stdout/stderr on the terminal; only a debug build enables
+the extra internal `DEBUG()` messages. The existing `dontfork ON` config
+option continues to work independently. Normal startup forks into the
+background and closes standard streams. To verify a daemon after starting,
+inspect the `pid.<handle>` file and the configured IRC connection.
 If you run from bin/ instead, adjust the relative path: ../mybot.cfg.
 
 ## Encrypt or import config/userlist

@@ -23,6 +23,7 @@ extern int stopPsotnic;
 extern ptrlist<module> modules;
 extern bool stopParsing;
 extern bool updateNotify;
+extern bool nxt_debug_mode; // -d: foreground in all build configurations
 
 #ifdef HAVE_DEBUG
 extern int debug;
