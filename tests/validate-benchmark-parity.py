@@ -33,6 +33,15 @@ def main():
                     print(f"classic={left!r}")
                     print(f"nxt={right!r}")
                     return 1
+        original=normalize(root/f"baseline-plain-{expected}.ul",expected)
+        if original != b:
+            for lineno,(left,right) in enumerate(zip_longest(original,b),1):
+                if left!=right:
+                    print(f"BASELINE_PARITY_FAIL users={expected} first_line={lineno}",flush=True)
+                    print(f"before={left!r}")
+                    print(f"after={right!r}")
+                    return 1
+        print(f"BASELINE_PARITY_OK users={expected} records={len(b)} handles={expected}",flush=True)
         print(f"PARITY_OK users={expected} records={len(a)} handles={expected}",flush=True)
     return 0
 

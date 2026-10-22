@@ -21,6 +21,12 @@ jobs:
           ref: 2bd6db1ecd84bc8f2ae90aae58de5ee3fe0263c2
           path: classic
           persist-credentials: false
+      - name: Checkout NXT before autosave optimization (pinned)
+        uses: actions/checkout@v4
+        with:
+          ref: 550bda2e7400a5fd8a1db365c6f9039a40e9519d
+          path: baseline
+          persist-credentials: false
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y build-essential libsodium-dev pkg-config perl python3
       - name: Insert benchmark driver into both actual main.cpp implementations (CI workspace only)
@@ -28,10 +34,13 @@ jobs:
           mkdir -p classic/tests
           cp tests/bench-userlist-driver.h classic/tests/bench-userlist-driver.h
           python3 tests/patch-benchmark.py classic
+          cp tests/bench-userlist-driver.h baseline/tests/bench-userlist-driver.h
+          python3 tests/patch-benchmark.py baseline --new
           python3 tests/patch-benchmark.py . --new
       - name: Build upstream original and NXT programs
         run: |
           (cd classic && perl configure --disable-modules && make dynamic)
+          (cd baseline && perl configure --disable-modules && make dynamic)
           perl configure --disable-modules
           make dynamic
       # Keep this workflow runnable for each optimization commit and collect
@@ -46,10 +55,10 @@ jobs:
           echo "CPU: $(grep -m1 'model name' /proc/cpuinfo)"
           echo "BENCH_HEADER mode users repeats median_us p95_us min_us max_us cpu_median_us bytes rss_before_kib rss_after_kib rss_peak_kib"
           for n in 100 1000 10000; do
-            for scenario in "classic plain" "nxt plain" "classic blowfish" "nxt nxt"; do
+            for scenario in "classic plain" "baseline plain" "nxt plain" "classic blowfish" "baseline nxt" "nxt nxt"; do
               set -- $scenario
               flavor="$1"; mode="$2"
-              if [ "$flavor" = classic ]; then exe=./classic/bin/psotnic; else exe=./bin/psotnic; fi
+              if [ "$flavor" = classic ]; then exe=./classic/bin/psotnic; elif [ "$flavor" = baseline ]; then exe=./baseline/bin/psotnic; else exe=./bin/psotnic; fi
               echo "START flavor=$flavor mode=$mode users=$n"
               NXT_BENCH="$mode" NXT_BENCH_COUNT="$n" NXT_BENCH_DEST="/tmp/ul-bench/$flavor-$mode-$n.ul" \
                 "$exe" | grep BENCH_RESULT
