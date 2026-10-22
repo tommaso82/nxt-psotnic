@@ -188,6 +188,15 @@ sub getGccOptions
         	$lflags .= "-lssl -lcrypto ";
     	}
     }
+
+    # Match the other dependency probes: compile + link a small real test.
+    # Checks for header, Argon2id and XChaCha20-Poly1305 symbols and adds
+    # -lsodium to the linker flags only when needed. pkg-config is optional.
+    tryCompile("${cc_prefix}g++", 'sodium.c', '-lsodium');
+    if(!$have{'sodium.c'})
+    {
+        die "[-] libsodium development headers or library not found (or incompatible). Install libsodium-dev and retry.\n";
+    }
 	
 	return ($cflags, $lflags);
 }

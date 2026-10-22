@@ -24,6 +24,8 @@ on:
       - 'classes.h'
       - 'functions.cpp'
       - 'configure'
+      - 'tests/test.pm'
+      - 'tests/sodium.c'
       - 'tests/test-nxt-crypto.sh'
       - 'tests/nxt-crypto-cli-test.cpp'
       - '.github/workflows/nxt-config-crypto.yml'
@@ -72,8 +74,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y libsodium-dev pkg-config build-essential perl
-      - name: Configure Psotnic
-        run: perl configure --disable-modules
+      - name: Configure Psotnic without pkg-config
+        run: |
+          # Force pkg-config to fail if accidentally invoked: the native
+          # C++ compile+link probe must find libsodium without it.
+          mkdir -p /tmp/nxt-no-pkgconfig
+          printf '#!/bin/sh\necho "configure must not invoke pkg-config" >&2\nexit 99\n' > /tmp/nxt-no-pkgconfig/pkg-config
+          chmod +x /tmp/nxt-no-pkgconfig/pkg-config
+          PATH="/tmp/nxt-no-pkgconfig:$PATH" perl configure --disable-modules
+          grep -q -- '-lsodium' Makefile.dynamic
       - name: Compile Psotnic
         run: make dynamic
       - name: Integrated bot CLI smoke test (without IRC network)
