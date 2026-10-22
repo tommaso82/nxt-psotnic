@@ -33,4 +33,46 @@ cmp "$tmp/expected.cfg" "$tmp/stripped.cfg"
 
 sum_after="$(sha256sum "$tmp/real-classic.cfg" | cut -d' ' -f1)"
 test "$sum_before" = "$sum_after"
-echo '[+] SUCCESS: recovered the correct cfg seed from genuinely compiled gay-psotnic binaries'
+
+echo '[*] Real userlist: generated with upstream ul_seed'
+"$fixture" "$tmp/real-classic.ul" ul
+printf '# classic userlist\n21 42\n82 1700000000\n' > "$tmp/expected.ul"
+"$nxt" userlist import "$tmp/real-classic.ul" --seed-file classic/seed.h --output "$tmp/userlist-seed.ul"
+cmp "$tmp/expected.ul" "$tmp/userlist-seed.ul"
+
+echo '[*] Recover ul_seed statically from real classic/bin/psotnic'
+"$nxt" userlist import "$tmp/real-classic.ul" --binary "$classic" --output "$tmp/userlist-binary.ul"
+cmp "$tmp/expected.ul" "$tmp/userlist-binary.ul"
+
+echo '[*] Recover ul_seed from stripped real classic/bin/psotnic'
+"$nxt" userlist import "$tmp/real-classic.ul" --binary "$tmp/stripped-classic" --output "$tmp/userlist-stripped.ul"
+cmp "$tmp/expected.ul" "$tmp/userlist-stripped.ul"
+
+echo '[*] Migrate original Blowfish UL directly to NXTCRYPT'
+"$nxt" userlist import "$tmp/real-classic.ul" --seed-file classic/seed.h --to nxt --output "$tmp/userlist.nxt" --password 'classic-test-ul-secret'
+"$nxt" userlist decrypt "$tmp/userlist.nxt" --output "$tmp/recovered.ul" --password 'classic-test-ul-secret'
+cmp "$tmp/expected.ul" "$tmp/recovered.ul"
+
+echo '[*] Cached-key encrypted userlist autosave, salt unchanged and nonce rotated'
+printf 'classic-test-ul-secret\n' > "$tmp/ul.pass"
+chmod 600 "$tmp/ul.pass"
+before="$(sha256sum "$tmp/userlist.nxt" | cut -d' ' -f1)"
+dd if="$tmp/userlist.nxt" bs=1 skip=18 count=16 of="$tmp/salt-before" status=none
+dd if="$tmp/userlist.nxt" bs=1 skip=34 count=24 of="$tmp/nonce-before" status=none
+/tmp/nxt-ul-session-test "$tmp/userlist.nxt" "$tmp/ul.pass"
+after="$(sha256sum "$tmp/userlist.nxt" | cut -d' ' -f1)"
+test "$before" != "$after"
+dd if="$tmp/userlist.nxt" bs=1 skip=18 count=16 of="$tmp/salt-after" status=none
+dd if="$tmp/userlist.nxt" bs=1 skip=34 count=24 of="$tmp/nonce-after" status=none
+cmp "$tmp/salt-before" "$tmp/salt-after"
+if cmp -s "$tmp/nonce-before" "$tmp/nonce-after"; then
+  echo 'ERROR: userlist AEAD nonce reused' >&2;exit 1
+fi
+"$nxt" userlist decrypt "$tmp/userlist.nxt" --output "$tmp/autosaved.ul" --password-file "$tmp/ul.pass"
+printf '# atomic autosave verified\n' >> "$tmp/expected.ul"
+cmp "$tmp/expected.ul" "$tmp/autosaved.ul"
+test "$(stat -c %a "$tmp/userlist.nxt")" = 600
+test -z "$(find "$tmp" -name '*.tmp-*' -print -quit)"
+
+
+echo '[+] SUCCESS: recovered the correct cfg and ul seeds from genuinely compiled gay-psotnic binaries'

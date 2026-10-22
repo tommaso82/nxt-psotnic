@@ -6,6 +6,11 @@ on:
     paths:
       - 'nxt-crypto.*'
       - 'nxt-legacy.*'
+      - 'class-userlist.cpp'
+      - 'class-inet.cpp'
+      - 'main.cpp'
+      - 'tests/ul-session-test.cpp'
+      - 'tests/test-classic-upstream.sh'
       - 'tests/legacy-fixture.cpp'
       - 'tests/test-nxt-legacy.sh'
       - 'config-load.cpp'
@@ -82,5 +87,6 @@ jobs:
           perl configure --disable-modules
           make dynamic
           g++ -std=c++11 -O0 -Iclassic classic/class-blowfish.cpp tests/classic-upstream-fixture.cpp -o /tmp/classic-upstream-fixture
+          g++ -std=c++11 -O2 -I. nxt-crypto.cpp nxt-legacy.cpp class-blowfish.cpp tests/ul-session-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-ul-session-test
       - name: Extract cfg seed from actual unstripped and stripped original psotnic binaries
         run: sh tests/test-classic-upstream.sh ./bin/psotnic classic/bin/psotnic /tmp/classic-upstream-fixture

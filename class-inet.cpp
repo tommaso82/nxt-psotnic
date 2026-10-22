@@ -678,6 +678,15 @@ int inetconn::send(const char *lst, ...)
 		size -= 2;
 	}
 
+	// Private userlist serialization: capture complete lines in RAM, never
+	// send plaintext over a pipe, socket or temporary file.
+	if(conn->capture)
+	{
+		conn->capture->append(p, size);
+		free(p);
+		return size;
+	}
+
 	if(conn->blowfish)
 	{
 		char *blowbuf = (char *) malloc(size + 8);

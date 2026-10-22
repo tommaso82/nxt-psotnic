@@ -28,6 +28,12 @@ const size_t HDR=8+1+1+4+4+crypto_pwhash_SALTBYTES+crypto_aead_xchacha20poly1305
 const size_t MAXDATA=8U*1024U*1024U;
 std::string password_arg, password_path;
 bool stdin_password=false, has_password_arg=false;
+bool bootstrap=false;
+std::string bootstrap_password;
+unsigned char ul_key[crypto_aead_xchacha20poly1305_ietf_KEYBYTES]={0};
+bool ul_active=false;
+std::vector<unsigned char> ul_header;
+std::string ul_path;
 void ready() { if(sodium_init()<0) throw std::runtime_error("libsodium initialization failed"); }
 void wipe(std::string &s) { if(!s.empty()) sodium_memzero(&s[0],s.size()); s.clear(); }
 void wipe(std::vector<unsigned char> &v) { if(!v.empty()) sodium_memzero(v.data(),v.size()); v.clear(); }
@@ -160,7 +166,7 @@ std::vector<unsigned char> seal(const std::vector<unsigned char>& plain,std::str
     out.resize(HDR+(size_t)length);
     return out;
 }
-std::string unseal(const std::vector<unsigned char>& in,std::string &pass) {
+std::string unseal(const std::vector<unsigned char>& in,std::string &pass,unsigned char *export_key=NULL) {
     ready();
     if(in.size()<HDR+crypto_aead_xchacha20poly1305_ietf_ABYTES ||
        memcmp(in.data(),MAGIC,8)!=0) throw std::runtime_error("not an NXTCRYPT file");
@@ -178,6 +184,7 @@ std::string unseal(const std::vector<unsigned char>& in,std::string &pass) {
     int err=crypto_aead_xchacha20poly1305_ietf_decrypt(plain.data(),&size,NULL,
         in.data()+HDR,in.size()-HDR,in.data(),HDR,
         in.data()+18+crypto_pwhash_SALTBYTES,key);
+    if(err==0 && export_key) memcpy(export_key,key,sizeof(key));
     sodium_memzero(key,sizeof(key));
     if(err!=0) {wipe(plain);throw std::runtime_error("wrong password or modified file");}
     std::string text(reinterpret_cast<const char*>(plain.data()),(size_t)size);
@@ -221,12 +228,119 @@ std::string decrypt_file(const char *path) {
     std::string pass=password(false);
     try {
         std::string out=unseal(input,pass);
+        if(bootstrap) { wipe(bootstrap_password); bootstrap_password=pass; }
         wipe(pass);wipe(input);wipe(password_arg);has_password_arg=false;
         return out;
     } catch(...) {
         wipe(pass);wipe(input);wipe(password_arg);has_password_arg=false;throw;
     }
 }
+
+void begin_bootstrap() { bootstrap=true; }
+void finish_bootstrap() {
+    bootstrap=false;
+    wipe(bootstrap_password);
+    wipe(password_arg);has_password_arg=false;
+}
+bool userlist_encrypted_session() { return ul_active; }
+
+std::string load_userlist_data(const char *path) {
+    ready();
+    std::vector<unsigned char> bytes=load_bytes(path);
+    if(bytes.size()<HDR+crypto_aead_xchacha20poly1305_ietf_ABYTES ||
+       memcmp(bytes.data(),MAGIC,8)!=0)
+        throw std::runtime_error("not an NXT encrypted userlist");
+    std::string pass=bootstrap_password.empty()?password(false):bootstrap_password;
+    unsigned char key[crypto_aead_xchacha20poly1305_ietf_KEYBYTES]={0};
+    try {
+        std::string clear=unseal(bytes,pass,key);
+        sodium_memzero(ul_key,sizeof ul_key);
+        memcpy(ul_key,key,sizeof key);
+        ul_header.assign(bytes.begin(),bytes.begin()+HDR);
+        ul_path=path;
+        ul_active=true;
+        sodium_memzero(key,sizeof key);
+        wipe(bytes);wipe(pass);wipe(password_arg);has_password_arg=false;
+        return clear;
+    } catch(...) {
+        sodium_memzero(key,sizeof key);
+        wipe(bytes);wipe(pass);
+        throw;
+    }
+}
+// Atomic replacement: temporary userlists are private; encrypted userlists
+// are NEVER written to disk as plaintext, even during an autosave.
+void atomic_userlist(const char *target,const unsigned char *data,size_t size) {
+    struct stat st;
+    const int stat_result=lstat(target,&st);
+    if(stat_result==0 && (!S_ISREG(st.st_mode) || st.st_uid!=geteuid()))
+        throw std::runtime_error("userlist target must be a regular file owned by this user");
+    if(stat_result!=0 && errno!=ENOENT)
+        throw std::runtime_error("userlist target is inaccessible");
+    std::string tmp=std::string(target)+".tmp-XXXXXX";
+    std::vector<char> name(tmp.begin(),tmp.end());
+    name.push_back('\0');
+    int fd=mkstemp(name.data());
+    if(fd<0) throw std::runtime_error("cannot create temporary userlist");
+    bool renamed=false;
+    try {
+        if(fchmod(fd,0600)!=0) throw std::runtime_error("cannot set userlist permissions");
+        size_t pos=0;
+        while(pos<size) {
+            ssize_t n=write(fd,data+pos,size-pos);
+            if(n<0 && errno==EINTR) continue;
+            if(n<=0) throw std::runtime_error("userlist write failed");
+            pos+=(size_t)n;
+        }
+        if(fsync(fd)!=0) throw std::runtime_error("userlist fsync failed");
+        if(close(fd)!=0) {fd=-1;throw std::runtime_error("userlist close failed");}
+        fd=-1;
+        if(rename(name.data(),target)!=0) throw std::runtime_error("userlist rename failed");
+        renamed=true;
+        std::string path(target);
+        const size_t slash=path.find_last_of('/');
+        const std::string folder=slash==std::string::npos?".":(slash==0?"/":path.substr(0,slash));
+        int dir=open(folder.c_str(),O_RDONLY|O_CLOEXEC|O_DIRECTORY);
+        if(dir>=0) {fsync(dir);close(dir);}
+    } catch(...) {
+        if(fd>=0)close(fd);
+        if(!renamed)unlink(name.data());
+        throw;
+    }
+}
+void save_userlist_data(const std::string& plaintext,const char *path) {
+    ready();
+    if(plaintext.empty() || plaintext.size()>MAXDATA)
+        throw std::runtime_error("invalid userlist size");
+    if(ul_active) {
+        if(ul_path!=path) throw std::runtime_error("userlist path changed during encrypted session");
+        std::vector<unsigned char> out(HDR+plaintext.size()+crypto_aead_xchacha20poly1305_ietf_ABYTES);
+        memcpy(out.data(),ul_header.data(),HDR);
+        randombytes_buf(out.data()+18+crypto_pwhash_SALTBYTES,
+                        crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+        unsigned long long length=0;
+        int rc=crypto_aead_xchacha20poly1305_ietf_encrypt(
+            out.data()+HDR,&length,reinterpret_cast<const unsigned char*>(plaintext.data()),plaintext.size(),
+            out.data(),HDR,NULL,out.data()+18+crypto_pwhash_SALTBYTES,ul_key);
+        if(rc!=0) {wipe(out);throw std::runtime_error("userlist encryption failed");}
+        out.resize(HDR+(size_t)length);
+        try { atomic_userlist(path,out.data(),out.size());wipe(out); }
+        catch(...) {wipe(out);throw;}
+    } else {
+        std::string target(path);
+        if(target.size()>=4 && target.substr(target.size()-4)==".nxt")
+            throw std::runtime_error("refusing to write plaintext userlist into .nxt; explicitly encrypt first");
+        if(is_nxt_file(path) || is_legacy_file(path))
+            throw std::runtime_error("refusing to overwrite an encrypted userlist with plaintext");
+        atomic_userlist(path,reinterpret_cast<const unsigned char*>(plaintext.data()),plaintext.size());
+    }
+}
+int userlist_command(int argc,char **argv) {
+    if(argc>2 && !strcmp(argv[2],"import"))
+        return nxtlegacy::import_userlist_command(argc,argv);
+    return config_command(argc,argv);
+}
+
 void encrypt_plaintext_to_file(const std::string& content, const char *path) {
     if(content.empty()) throw std::runtime_error("cannot encrypt empty configuration");
     std::string pass=password(true);

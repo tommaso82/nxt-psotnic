@@ -4,5 +4,6 @@
 namespace nxtlegacy {
 std::string legacy_decrypt(const char *input,const char *seed_file,const char *binary);
 int import_command(int argc,char **argv);
+int import_userlist_command(int argc,char **argv);
 }
 #endif

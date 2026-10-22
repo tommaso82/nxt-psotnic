@@ -339,6 +339,11 @@ void parse_cmdline(int argc, char *argv[])
 		int status = nxtcrypto::config_command(argc, argv);
 		::exit(status);
 	}
+	if(argc > 1 && !strcmp(argv[1], "userlist"))
+	{
+		int status = nxtcrypto::userlist_command(argc, argv);
+		::exit(status);
+	}
 	int i;
 #ifdef HAVE_DEBUG
 	bool decrypted = false;

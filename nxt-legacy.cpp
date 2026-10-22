@@ -43,10 +43,13 @@ void erase(std::string &x) {
 }
 typedef std::vector<unsigned char> Bytes;
 
-bool is_legacy_v3(const Bytes &in) {
+bool is_legacy_v3(const Bytes &in,bool userlist) {
     if(in.size()<20 || ((in.size()-12)%8)!=0 || memcmp(in.data(),"psotnic\0",8)!=0)
         return false;
     const unsigned char *v=in.data()+8;
+    if(userlist)
+        return (v[0]==3 && v[1]==0 && v[2]==0 && v[3]==128) ||
+               (v[0]==128 && v[1]==0 && v[2]==0 && v[3]==3);
     return (v[0]==3 && !v[1] && !v[2] && !v[3]) ||
            (!v[0] && !v[1] && !v[2] && v[3]==3);
 }
@@ -56,10 +59,10 @@ unsigned int nibble(char c) {
     if(c>='A'&&c<='F') return c-'A'+10;
     throw std::runtime_error("invalid cfg_seed hex escape");
 }
-Bytes seed_from_header(const char *path) {
+Bytes seed_from_header(const char *path,bool userlist) {
     Bytes bytes=read_bytes(path,1024U*1024U);
     std::string s(bytes.begin(),bytes.end());
-    const std::string token="cfg_seed";
+    const std::string token=userlist?"ul_seed":"cfg_seed";
     size_t p=s.find(token);
     if(p==std::string::npos) throw std::runtime_error("cfg_seed not found in seed.h");
     p+=token.size();
@@ -81,10 +84,10 @@ Bytes seed_from_header(const char *path) {
     erase(bytes);erase(s);
     return seed;
 }
-bool plausible(const std::string& data) {
+bool plausible(const std::string& data,bool userlist) {
     if(data.empty() || data.size()>MAX_CFG || data[data.size()-1]!='\n') return false;
     size_t lines=0, options=0;
-    bool nick=false;
+    bool nick=false, seq=false, timestamp=false;
     size_t start=0;
     while(start<data.size()) {
         size_t end=data.find('\n',start);
@@ -99,17 +102,20 @@ bool plausible(const std::string& data) {
             size_t q=p;
             while(q<end && (std::isalnum((unsigned char)data[q]) || data[q]=='-' || data[q]=='_')) ++q;
             if(q==p || q-p>80 || (q<end && data[q]!=' ' && data[q]!='\t')) return false;
-            if(data.compare(p,q-p,"nick")==0 && q<end) nick=true;
+            const std::string directive=data.substr(p,q-p);
+            if(directive=="nick" && q<end) nick=true;
+            if(directive=="21" && q<end && data[q+1]>='1' && data[q+1]<='9') seq=true;
+            if(directive=="82" && q<end && data[q+1]>='0' && data[q+1]<='9') timestamp=true;
             ++options;
         }
         ++lines;
         if(lines>100000) return false;
         start=end+1;
     }
-    return nick && options>=1;
+    return userlist?(seq && timestamp && options>=2):(nick && options>=1);
 }
-bool decrypt_with_seed(const Bytes &encrypted, const Bytes &seed, std::string& output) {
-    if(seed.size()!=16 || !is_legacy_v3(encrypted)) return false;
+bool decrypt_with_seed(const Bytes &encrypted, const Bytes &seed, std::string& output,bool userlist) {
+    if(seed.size()!=16 || !is_legacy_v3(encrypted,userlist)) return false;
     CBlowFish cipher;
     unsigned char key[16];memcpy(key,seed.data(),16);
     cipher.Initialize(key,16);
@@ -131,7 +137,7 @@ bool decrypt_with_seed(const Bytes &encrypted, const Bytes &seed, std::string& o
         } else if(c=='\0') {valid=false;break;}
         else text.push_back((char)c);
     }
-    if(valid) valid=plausible(text);
+    if(valid) valid=plausible(text,userlist);
     erase(plain);
     if(valid) output.swap(text);
     erase(text);
@@ -217,7 +223,7 @@ std::vector<Bytes> binary_candidates(const Bytes& file) {
     }
     return candidates;
 }
-std::string decrypt_binary(const Bytes& encrypted,const char *binary) {
+std::string decrypt_binary(const Bytes& encrypted,const char *binary,bool userlist) {
     Bytes file=read_bytes(binary,MAX_BIN);
     std::vector<Bytes> candidates=binary_candidates(file);
     erase(file);
@@ -228,7 +234,7 @@ std::string decrypt_binary(const Bytes& encrypted,const char *binary) {
         for(unsigned int mask=0;mask<256;++mask) {
             Bytes seed=candidates[i];
             for(int j=0;j<16;++j) seed[j]^=(unsigned char)mask;
-            if(decrypt_with_seed(encrypted,seed,plaintext)) {
+            if(decrypt_with_seed(encrypted,seed,plaintext,userlist)) {
                 erase(seed);
                 for(size_t j=0;j<candidates.size();++j) erase(candidates[j]);
                 return plaintext;
@@ -262,23 +268,26 @@ void save_plain(const char *path,const std::string &text) {
 }
 } // namespace
 
-std::string legacy_decrypt(const char *file,const char *seed_file,const char *binary) {
+std::string legacy_decrypt_as(const char *file,const char *seed_file,const char *binary,bool userlist) {
     Bytes cipher=read_bytes(file,MAX_CFG);
-    if(!is_legacy_v3(cipher)) throw std::runtime_error("not a supported legacy Blowfish config (version 3)");
+    if(!is_legacy_v3(cipher,userlist)) throw std::runtime_error("unsupported legacy Blowfish header/version");
     if(seed_file && binary) throw std::runtime_error("choose --seed-file or --binary, not both");
     if(!seed_file && !binary) throw std::runtime_error("supply --seed-file seed.h or --binary old-psotnic");
     std::string out;
     if(seed_file) {
-        Bytes seed=seed_from_header(seed_file);
-        bool success=decrypt_with_seed(cipher,seed,out);
+        Bytes seed=seed_from_header(seed_file,userlist);
+        bool success=decrypt_with_seed(cipher,seed,out,userlist);
         erase(seed);
         if(!success) throw std::runtime_error("legacy seed did not decode a valid config");
-    } else out=decrypt_binary(cipher,binary);
+    } else out=decrypt_binary(cipher,binary,userlist);
     erase(cipher);
     return out;
 }
-int import_command(int argc,char **argv) {
-    if(argc<4) {fprintf(stderr,"Usage: psotnic config import OLD.cfg (--seed-file seed.h | --binary old-psotnic) [--preview | --output NEW.cfg --to plain|nxt]\n");return 1;}
+std::string legacy_decrypt(const char *file,const char *seed_file,const char *binary) {
+    return legacy_decrypt_as(file,seed_file,binary,false);
+}
+int import_common(int argc,char **argv,bool userlist) {
+    if(argc<4) {fprintf(stderr,"Usage: psotnic config|userlist import OLD.cfg (--seed-file seed.h | --binary old-psotnic) [--preview | --output NEW.cfg --to plain|nxt]\n");return 1;}
     const char *seed_file=NULL, *binary=NULL, *output=NULL;
     std::string mode="plain";bool preview=false;
     try {
@@ -298,7 +307,7 @@ int import_command(int argc,char **argv) {
         if(preview && output) throw std::runtime_error("preview cannot write an output file");
         if(!preview && !output) throw std::runtime_error("--output is required unless --preview");
         if(!seed_file && !binary) throw std::runtime_error("missing --seed-file or --binary");
-        std::string plain=legacy_decrypt(argv[3],seed_file,binary);
+        std::string plain=legacy_decrypt_as(argv[3],seed_file,binary,userlist);
         try {
             if(preview) {
                 if(fwrite(plain.data(),1,plain.size(),stdout)!=plain.size())
@@ -318,4 +327,6 @@ int import_command(int argc,char **argv) {
         return 1;
     }
 }
+int import_command(int argc,char **argv) {return import_common(argc,argv,false);}
+int import_userlist_command(int argc,char **argv) {return import_common(argc,argv,true);}
 } // namespace nxtlegacy

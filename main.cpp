@@ -19,6 +19,7 @@
  ***************************************************************************/
 
 #include "prots.h"
+#include "nxt-crypto.h"
 
 ptrlist<module> modules;
 
@@ -123,6 +124,7 @@ int main(int argc, char *argv[])
 	srand();
 
 	precache();
+	nxtcrypto::begin_bootstrap();
 	parse_cmdline(argc, argv);
 
 	userlist.addHandle("idiots", 0, 0, 0, 0, config.handle);
@@ -166,6 +168,8 @@ int main(int argc, char *argv[])
 			stopParsing=false;
 		}
 	}
+
+	nxtcrypto::finish_bootstrap();
 
 #ifdef HAVE_DEBUG
 	if(!debug) lurk();

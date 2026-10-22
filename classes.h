@@ -546,6 +546,7 @@ class inetconn
 
 	IOBUF read;
 	IOBUF write;
+	std::string *capture; // Optional in-RAM serialization target for private userlists
 
 	HANDLE *handle;
 
@@ -1167,8 +1168,8 @@ class ul
 	void sendHandleInfo(inetconn *c, const HANDLE *h, const char *mask=NULL);
 	void sendDSetsToBots(const char *channel);
 
-	bool save(const char *file, const int cypher=1, const char *key=NULL);
-	int load(const char *file, const int cypher=1, const char *key=NULL);
+	bool save(const char *file, const int cypher=0, const char *key=NULL);
+	int load(const char *file, const int cypher=0, const char *key=NULL);
 	void update();
 	void updated(bool save=true);
 	void send(inetconn *c);
