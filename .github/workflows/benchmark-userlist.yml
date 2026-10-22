@@ -55,5 +55,5 @@ jobs:
                 "$exe" | grep BENCH_RESULT
             done
           done
-          echo "SEMANTIC PARITY: ignore only per-process user creation timestamps and UL timestamp"
+          echo "SEMANTIC PARITY: check all file metadata including createdBy and hostBy; normalize only process timestamps"
           python3 tests/validate-benchmark-parity.py /tmp/ul-bench
