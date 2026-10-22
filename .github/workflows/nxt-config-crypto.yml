@@ -8,6 +8,8 @@ on:
       - 'nxt-legacy.*'
       - 'nxt-proxy.*'
       - 'class-client.cpp'
+      - 'class-ent.cpp'
+      - 'class-ent.h'
       - 'tests/test-nxt-proxy.cpp'
       - 'class-userlist.cpp'
       - 'class-inet.cpp'
@@ -51,6 +53,17 @@ jobs:
         run: g++ -std=c++11 -O2 -Wall -Wextra -Werror nxt-proxy.cpp tests/test-nxt-proxy.cpp -o /tmp/nxt-proxy-test
       - name: Validate fragmented handshakes, auth, IPv6 and fail-closed behavior
         run: /tmp/nxt-proxy-test
+  no-adns-build:
+    name: No-ADNS build (proxy-safe destination DNS)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsodium-dev pkg-config build-essential perl
+      - name: Compile without asynchronous DNS
+        run: |
+          perl configure --disable-adns --disable-modules
+          make dynamic
   bot-build:
     runs-on: ubuntu-24.04
     steps:

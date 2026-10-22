@@ -35,6 +35,7 @@ private:
 const char *strip_host_prefix(const char *s);
 extern Session irc;
 extern Session hub;
+extern bool defer_dns;
 Type parse_type(const char *value);
 }
 #endif

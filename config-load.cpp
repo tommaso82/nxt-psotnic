@@ -21,6 +21,7 @@
 #include "prots.h"
 #include "global-var.h"
 #include "nxt-crypto.h"
+#include "nxt-proxy.h"
 #include <string>
 #include <stdexcept>
 #include <sodium.h>
@@ -39,6 +40,9 @@ void CONFIG::load(const char *file, bool decrypted)
 	inetconn f;
 
 	config.file = file;
+#ifndef HAVE_ADNS
+    nxtproxy::defer_dns=true;
+#endif
 
 	getcwd(cwd, MAX_LEN);
 
@@ -101,6 +105,29 @@ void CONFIG::load(const char *file, bool decrypted)
 		}
 	}
 
+#ifndef HAVE_ADNS
+    nxtproxy::defer_dns=false;
+    // Do the classic local lookup only for truly direct connections.
+    const bool proxied=strcmp(proxy_type,"none")!=0;
+    const bool proxy_hub=proxied && !strcmp(proxy_scope,"irc,hub");
+    const auto resolve_direct=[&](entHost &host) {
+        if(host.isDefault() || !(host.getConnectionStringType() & entHost::domain))return;
+        const std::string original=host.getValue();
+        options::event *event=host.setValue("host",original.c_str());
+        if(!event || !event->ok) {
+            printf("[-] Cannot resolve direct connection host: %s\n",original.c_str());
+            ++errors;
+        }
+    };
+    if(!proxied)
+        for(int i=0;i<MAX_SERVERS;++i)
+            if(!server[i].isDefault()) resolve_direct(server[i].getHost());
+    if(!proxy_hub) {
+        if(!hub.isDefault())resolve_direct(hub.getHost());
+        for(int i=0;i<MAX_ALTS;++i)
+            if(!alt[i].isDefault())resolve_direct(alt[i].getHost());
+    }
+#endif
 	if(encrypted && !plaintext.empty()) sodium_memzero(&plaintext[0], plaintext.size());
 
 	/* Basic checks */

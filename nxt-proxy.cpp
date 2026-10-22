@@ -9,6 +9,7 @@
 namespace nxtproxy {
 Session irc;
 Session hub;
+bool defer_dns=false;
 Type parse_type(const char *value) {
     if(value && !strcmp(value,"socks5"))return SOCKS5;
     if(value && !strcmp(value,"http"))return HTTP_CONNECT;
