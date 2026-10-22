@@ -32,8 +32,6 @@ int bc_restart(HANDLE *h, const char *data, char arg[][MAX_LEN], int argc);
 int bc_raw(HANDLE *h, const char *data, char arg[][MAX_LEN], int argc);
 int bc_names(HANDLE *h, const char *data, char arg[][MAX_LEN], int argc);
 int bc_cwho(HANDLE *h, const char *data, char arg[][MAX_LEN], int argc);
-int bc_update(HANDLE *h, const char *data, char arg[][MAX_LEN], int argc);
-int bc_stopupdate(HANDLE *h, const char *data, char arg[][MAX_LEN], int argc);
 int bc_jump(HANDLE *h, const char *data, char arg[][MAX_LEN], int argc);
 int bc_status(HANDLE *h, const char *data, char arg[][MAX_LEN], int argc);
 int bc_help(HANDLE *h, const char *data, char arg[][MAX_LEN], int argc);
@@ -52,8 +50,6 @@ bot_commands bot_cmds[] =
     { "raw", bc_raw, 1, "<text>" },
     { "names", bc_names, 1, "<chan>" },
     { "cwho", bc_cwho, 1, "<chan> [v|o|l|b]" },
-    { "update", bc_update, 0, "[id:passwd]" },
-    { "stopupdate", bc_stopupdate, 0, "" },
     { "jump", bc_jump, 1, "<#number>" },
     { "status", bc_status, 0, "" },
     { "help", bc_help, 0, "" },
@@ -282,30 +278,6 @@ int bc_cwho(HANDLE *h, const char *data, char arg[][MAX_LEN], int argc)
     else
         net.sendUser(arg[0], "Invalid channel");
 
-    return 0;
-}
-
-int bc_update(HANDLE *h, const char *data, char arg[][MAX_LEN], int argc)
-{
-    if(!(h->flags[GLOBAL] & HAS_X))
-    {
-        net.sendUser(arg[0], "%s", S_NOPERM);
-        return 0;
-    }
-
-    psotget.forkAndGo(NULL, argc == 1 ? arg[2] : NULL);
-    return 0;
-}
-
-int bc_stopupdate(HANDLE *h, const char *data, char arg[][MAX_LEN], int argc)
-{
-    if(!(h->flags[GLOBAL] & HAS_X))
-    {
-        net.sendUser(arg[0], "%s", S_NOPERM);
-        return 0;
-    }
-
-    psotget.end();
     return 0;
 }
 
