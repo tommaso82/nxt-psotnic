@@ -332,8 +332,78 @@ int rmdirext(const char *dir)
 	return 0;
 }
 
+static void print_nxt_help(const char *exe)
+{
+    printf(
+        "NXT-Psotnic - lightweight IRC bot based on gay-psotnic\n"
+        "\n"
+        "Usage:\n"
+        "  %s [OPTIONS] CONFIG_FILE          Start the bot\n"
+        "  %s -n                             Interactive configuration wizard\n"
+        "  %s -ne                            Expert configuration wizard\n"
+        "  %s config COMMAND ...            Config encryption and migration\n"
+        "  %s userlist COMMAND ...          Userlist encryption and migration\n"
+        "\n"
+        "General options:\n"
+        "  -h, --help                        Show this help\n"
+        "  -v, --version                     Show version and build information\n"
+        "  -a CONFIG_FILE [CONFIG_FILE ...]  Add crontab entries (legacy behavior)\n"
+        "  --password-file FILE              Read the startup password from a file\n"
+        "  --password-stdin                  Read the startup password from stdin\n"
+        "  --password TEXT                   Inline password (unsafe: process listing)\n"
+#ifdef HAVE_DEBUG
+        "  -d                                Debug mode (debug builds only)\n"
+        "  -T                                Historical debug config mode\n"
+#endif
+        "\n"
+        "Configuration commands:\n"
+        "  %s config encrypt INPUT --output OUTPUT [PASSWORD_OPTION]\n"
+        "  %s config decrypt INPUT --output OUTPUT [PASSWORD_OPTION]\n"
+        "  %s config preview INPUT [PASSWORD_OPTION]\n"
+        "  %s config import OLD.cfg --binary OLD_BOT --output NEW.cfg\n"
+        "  %s userlist import OLD.ul --binary OLD_BOT --output NEW.ul\n"
+        "  Use '%s config --help' or '%s userlist --help' for command details.\n"
+        "\n"
+        "Global outbound proxy (settings inside CONFIG_FILE, not CLI flags):\n"
+        "  proxy-type none|socks5|http      Default: none\n"
+        "  proxy-host HOST                  Required when enabled\n"
+        "  proxy-port PORT                  Required when enabled\n"
+        "  proxy-user USER                  Optional username\n"
+        "  proxy-pass PASSWORD              Optional password\n"
+        "  proxy-scope irc|irc,hub          Default: irc\n"
+        "\n"
+        "Getting started:\n"
+        "  %s -n\n"
+        "  %s bot.cfg\n"
+        "  %s config encrypt bot.cfg --output bot.cfg.nxt\n"
+        "  %s bot.cfg.nxt\n"
+        "\n"
+        "Run from the project root or give the full path to CONFIG_FILE.\n"
+        "Docs: README.md and docs/NXT-PROXY.md (in the source tree).\n",
+        exe,exe,exe,exe,exe,exe,exe,exe,exe,exe,exe,exe,exe,exe,exe,exe);
+}
+
 void parse_cmdline(int argc, char *argv[])
 {
+    // Help must be handled before loading config or touching the network.
+    if(argc==1) {
+        print_nxt_help(argv[0]);
+        ::exit(0);
+    }
+    if(argc==2 && (!strcmp(argv[1],"-h") || !strcmp(argv[1],"--help") ||
+                   !strcmp(argv[1],"help"))) {
+        print_nxt_help(argv[0]);
+        ::exit(0);
+    }
+    if(argc==2 && !strcmp(argv[1],"--version")) {
+        propaganda();
+        ::exit(0);
+    }
+    if(argc==3 && (!strcmp(argv[1],"config") || !strcmp(argv[1],"userlist")) &&
+       (!strcmp(argv[2],"-h") || !strcmp(argv[2],"--help"))) {
+        print_nxt_help(argv[0]);
+        ::exit(0);
+    }
 	if(argc > 1 && !strcmp(argv[1], "config"))
 	{
 		int status = nxtcrypto::config_command(argc, argv);
@@ -349,15 +419,6 @@ void parse_cmdline(int argc, char *argv[])
 	bool decrypted = false;
 #endif
 
-	if(argc == 1)
-	{
-#ifdef HAVE_DEBUG
-		printf("Syntax: %s [-v] [-a] [-d] [-u] [-n] [-ne] [--password-file PATH] [config file]\n", argv[0]);
-#else
-		printf("Syntax: %s [-v] [-a] [-n] [-ne] [config file]\n", argv[0]);
-#endif
-		exit(1);
-	}
 
 	propaganda();
 	if(!strcmp(argv[1], "-v")) exit(0);
@@ -399,7 +460,7 @@ void parse_cmdline(int argc, char *argv[])
 		}
 #endif
 
-		else if(!strcmp(argv[i], "-v")) exit(0);
+		else if(!strcmp(argv[i], "-v") || !strcmp(argv[i], "--version")) exit(0);
 
 		else if(!strcmp(argv[i], "-c"))
 		{
@@ -424,9 +485,25 @@ void parse_cmdline(int argc, char *argv[])
 			createInitialConfig(true);
 
 #ifdef HAVE_DEBUG
+        else if(!strcmp(argv[i],"-h") || !strcmp(argv[i],"--help")) {
+            print_nxt_help(argv[0]);
+            ::exit(0);
+        }
+        else if(argv[i][0]=='-' && i == argc-1) {
+            fprintf(stderr,"Unknown option: %s\nUse --help for available commands.\n",argv[i]);
+            ::exit(1);
+        }
 		else if(!strcmp(argv[i], "-T")) decrypted = true;
 		else if(i == argc - 1) config.load(argv[i], decrypted);
 #else
+        else if(!strcmp(argv[i],"-h") || !strcmp(argv[i],"--help")) {
+            print_nxt_help(argv[0]);
+            ::exit(0);
+        }
+        else if(argv[i][0]=='-' && i == argc-1) {
+            fprintf(stderr,"Unknown option: %s\nUse --help for available commands.\n",argv[i]);
+            ::exit(1);
+        }
 		else if(i == argc - 1) config.load(argv[i]);
 #endif
 		else
@@ -767,6 +844,7 @@ void propaganda()
 	printf("\n");
 	printf("Copyright (C) 2003-2007 Grzegorz Rusin <grusin@gmail.com>\n");
 	printf("Copyright (C) 2009 psotnic.com development team\n");
+    printf("NXT-Psotnic fork - original gay-psotnic 0.1.1 codebase\n");
 	printf("\n");
 }
 

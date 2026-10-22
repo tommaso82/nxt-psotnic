@@ -95,6 +95,30 @@ jobs:
           ./bin/psotnic config decrypt /tmp/legacy-smoke-new.nxt --output /tmp/legacy-smoke-recovered.cfg --password 'synthetic CI password for smoke test'
           cmp /tmp/legacy-smoke-preview.cfg /tmp/legacy-smoke-recovered.cfg
 
+      - name: Verify NXT identity and built-in help CLI
+        run: |
+          ./bin/psotnic -h > /tmp/nxt-help.txt
+          ./bin/psotnic --help > /tmp/nxt-long-help.txt
+          ./bin/psotnic > /tmp/nxt-no-args-help.txt
+          cmp /tmp/nxt-help.txt /tmp/nxt-long-help.txt
+          cmp /tmp/nxt-help.txt /tmp/nxt-no-args-help.txt
+          grep -q 'NXT-Psotnic - lightweight IRC bot' /tmp/nxt-help.txt
+          grep -q 'proxy-scope irc|irc,hub' /tmp/nxt-help.txt
+          grep -q 'config encrypt INPUT' /tmp/nxt-help.txt
+          ./bin/psotnic config --help > /tmp/nxt-config-help.txt
+          ./bin/psotnic userlist --help > /tmp/nxt-ul-help.txt
+          grep -q 'userlist import' /tmp/nxt-ul-help.txt
+          ./bin/psotnic -v > /tmp/nxt-v.txt
+          ./bin/psotnic --version > /tmp/nxt-version.txt
+          grep -q 'NXT-Psotnic, version' /tmp/nxt-v.txt
+          cmp /tmp/nxt-v.txt /tmp/nxt-version.txt
+          if ./bin/psotnic -not-an-option > /tmp/nxt-badout 2>&1; then
+            echo 'Unknown option unexpectedly succeeded'; exit 1
+          fi
+          grep -q 'Unknown option:' /tmp/nxt-badout
+          if grep -q 'Loading plaintext config' /tmp/nxt-badout; then
+            echo 'Unknown option was incorrectly treated as config'; exit 1
+          fi
       - name: Exercise real NXT binary through local authenticated SOCKS5 and HTTP CONNECT
         run: python3 tests/test-nxt-proxy-integration.py ./bin/psotnic
 

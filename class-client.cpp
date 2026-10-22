@@ -103,7 +103,7 @@ void client::checkMyHost(const char *to,  bool justConnected)
 void client::sendStatus(const char *name)
 {
 	net.sendUser(name, "- about me:");
-	net.sendUser(name, "Hi. I'm %s and I'm running psotnic %s", (const char *) config.handle, S_VERSION);
+	net.sendUser(name, "Hi. I'm %s and I'm running %s %s", (const char *) config.handle, S_BOTNAME, S_VERSION);
 
 	char buf[MAX_LEN];
 	int min, max, sum;

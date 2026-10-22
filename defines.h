@@ -242,7 +242,7 @@
 #define S_VERSION				"0.1.1 (26-02-24)"
 #define PATCHLEVEL				"000100"
 
-#define S_BOTNAME				"gay-psotnic"
+#define S_BOTNAME				"NXT-Psotnic"
 
 #define	bk						printf("### %s(): %s:%d\n", __FUNCTION__, __FILE__, __LINE__)
 #define ircstrip(str)			(str[0] == ':') ? (str+1) : (str)
