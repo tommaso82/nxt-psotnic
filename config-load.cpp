@@ -166,6 +166,24 @@ void CONFIG::load(const char *file, bool decrypted)
                 }
         }
 
+    if(strcmp(proxy_type,"none") && strcmp(proxy_type,"socks5") && strcmp(proxy_type,"http")) {
+        printf("[-] proxy-type must be none, socks5 or http\n");
+        exit(1);
+    }
+    if(strcmp(proxy_scope,"irc") && strcmp(proxy_scope,"irc,hub")) {
+        printf("[-] proxy-scope must be irc or irc,hub\n");
+        exit(1);
+    }
+    if(strcmp(proxy_type,"none")) {
+        if(proxy_host.isDefault() || proxy_port.value==0) {
+            printf("[-] proxy-host and proxy-port are required\n");
+            exit(1);
+        }
+        if(!proxy_user.getLen() && proxy_pass.getLen()) {
+            printf("[-] proxy-pass requires proxy-user\n");
+            exit(1);
+        }
+    }
 	polish();
 
 	if(imUp())

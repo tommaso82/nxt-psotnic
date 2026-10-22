@@ -20,6 +20,25 @@
 
 #include "prots.h"
 #include "global-var.h"
+#include "nxt-proxy.h"
+
+// Outgoing sockets only: resolve proxy endpoint, never the tunneled destination.
+static int connect_via_nxt_proxy(const char *v4bind,const char *v6bind) {
+#ifdef HAVE_ADNS
+    const int resolved=config.proxy_host.updateDnsEntry();
+    if(resolved<=0) return resolved;
+#endif
+#ifdef HAVE_IPV6
+    if(*config.proxy_host.ip6)
+        return doConnect6(config.proxy_host.ip6,config.proxy_port,v6bind,-1);
+#endif
+    return doConnect(config.proxy_host.ip4,config.proxy_port,v4bind,-1);
+}
+static bool use_nxt_proxy(bool hub) {
+    return strcmp(config.proxy_type,"none") &&
+           (!hub || !strcmp(config.proxy_scope,"irc,hub"));
+}
+
 
 void client::checkMyHost(const char *to,  bool justConnected)
 {
@@ -517,7 +536,7 @@ int client::connectToHUB()
 #ifdef HAVE_ADNS
 	}
 
-	i = config.currentHub->getHost().updateDnsEntry();
+	i = use_nxt_proxy(true) ? 1 : config.currentHub->getHost().updateDnsEntry();
 
 	switch(i)
 	{
@@ -543,12 +562,25 @@ int client::connectToHUB()
 		  proto==6 ? (const char *) config.currentHub->getHost().ip6 : (const char *) config.currentHub->getHost().ip4,
 		  (int) config.currentHub->getPort()));
 
+    nxtproxy::hub.reset();
+    const bool proxied=use_nxt_proxy(true);
+    if(proxied)
+        fd=connect_via_nxt_proxy(config.myipv4,config.myipv6);
+    else {
 #ifdef HAVE_IPV6
 	if(proto == 6)
 		fd = doConnect6((const char *) config.currentHub->getHost().ip6, config.currentHub->getPort(), config.myipv6, -1);
 	else
 #endif
 		fd = doConnect((const char *) config.currentHub->getHost().ip4, config.currentHub->getPort(), config.myipv4, -1);
+    }
+    if(fd>0 && proxied &&
+       !nxtproxy::hub.begin(fd,nxtproxy::parse_type(config.proxy_type),
+           nxtproxy::strip_host_prefix(config.currentHub->getHost().connectionString),
+           config.currentHub->getPort(),config.proxy_user,config.proxy_pass)) {
+        killSocket(fd);
+        return -1;
+    }
 
 	if(fd > 0)
 	{
@@ -594,7 +626,7 @@ int client::connectToIRC(entServer *s)
 	}
 
 #ifdef HAVE_ADNS
-        n = config.currentServer->getHost().updateDnsEntry();
+        n = use_nxt_proxy(false) ? 1 : config.currentServer->getHost().updateDnsEntry();
 
         switch(n)
         {
@@ -637,12 +669,25 @@ int client::connectToIRC(entServer *s)
                   proto==6 ? (const char *) config.currentServer->getHost().ip6 : (const char *) config.currentServer->getHost().ip4,
                   (int) config.currentServer->getPort(), (const char*) config.vhost));
 
+    nxtproxy::irc.reset();
+    const bool proxied=use_nxt_proxy(false);
+    if(proxied)
+        n=connect_via_nxt_proxy(config.vhost,config.vhost);
+    else {
 #ifdef HAVE_IPV6
 	if(proto == 6)
 		n = doConnect6(config.currentServer->getHost().ip6, config.currentServer->getPort(), config.vhost, -1);
 	else
 #endif
 		n = doConnect((const char *) config.currentServer->getHost().ip4, config.currentServer->getPort(), config.vhost, -1);
+    }
+    if(n>0 && proxied &&
+       !nxtproxy::irc.begin(n,nxtproxy::parse_type(config.proxy_type),
+           nxtproxy::strip_host_prefix(config.currentServer->getHost().connectionString),
+           config.currentServer->getPort(),config.proxy_user,config.proxy_pass)) {
+        killSocket(n);
+        return 0;
+    }
 
 	if(n > 0)
 	{

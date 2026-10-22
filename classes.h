@@ -769,6 +769,12 @@ class CONFIG : public options
 	entHost vhost;
 	entWord userlist_file;
 	entWord botnetword;
+    entWord proxy_type;
+    entHost proxy_host;
+    entInt proxy_port;
+    entString proxy_user;
+    entString proxy_pass;
+    entWord proxy_scope;
 
 	entWord logfile;
 	entWord handle;

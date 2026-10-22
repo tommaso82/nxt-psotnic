@@ -6,6 +6,9 @@ on:
     paths:
       - 'nxt-crypto.*'
       - 'nxt-legacy.*'
+      - 'nxt-proxy.*'
+      - 'class-client.cpp'
+      - 'tests/test-nxt-proxy.cpp'
       - 'class-userlist.cpp'
       - 'class-inet.cpp'
       - 'main.cpp'
@@ -39,6 +42,15 @@ jobs:
         run: sh tests/test-nxt-crypto.sh /tmp/nxt-crypto-test
       - name: Legacy Blowfish decoding, seed.h, ELF binary extraction and direct NXT migration
         run: sh tests/test-nxt-legacy.sh /tmp/nxt-crypto-test /tmp/old-psotnic-0 /tmp/old-psotnic-1 /tmp/old-psotnic-2
+  proxy-protocol:
+    name: SOCKS5 and HTTP CONNECT protocol regression
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build proxy state machine test
+        run: g++ -std=c++11 -O2 -Wall -Wextra -Werror nxt-proxy.cpp tests/test-nxt-proxy.cpp -o /tmp/nxt-proxy-test
+      - name: Validate fragmented handshakes, auth, IPv6 and fail-closed behavior
+        run: /tmp/nxt-proxy-test
   bot-build:
     runs-on: ubuntu-24.04
     steps:

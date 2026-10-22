@@ -466,6 +466,13 @@ CONFIG::CONFIG()
 	registerObject(dontfork = entBool("dontfork", 0));
 	registerObject(keepnick = entBool("keepnick", 0));
 	registerObject(botnetword = entWord("botnetword", 1, 255, "###\001The\001Psotnic\001Project\001###"));
+    registerObject(proxy_type = entWord("proxy-type", 1, 12, "none"));
+    registerObject(proxy_host = entHost("proxy-host", entHost::ipv4 | entHost::ipv6 | entHost::domain));
+    registerObject(proxy_port = entInt("proxy-port", 0, 65535, 0));
+    registerObject(proxy_user = entString("proxy-user", 0, 255, ""));
+    registerObject(proxy_pass = entString("proxy-pass", 0, 255, ""));
+    registerObject(proxy_scope = entWord("proxy-scope", 1, 16, "irc"));
+
 
 	registerObject(listenport_storage = entMult("listen"));
 	for(i=0; i<MAX_LISTENPORTS; ++i)

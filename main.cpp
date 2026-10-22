@@ -20,6 +20,7 @@
 
 #include "prots.h"
 #include "nxt-crypto.h"
+#include "nxt-proxy.h"
 
 ptrlist<module> modules;
 
@@ -211,18 +212,26 @@ int main(int argc, char *argv[])
 
 		if(net.irc.fd && !net.irc.timedOut())
 		{
-			if((net.irc.status & STATUS_SYNSENT) || net.irc.write.buf)
-				FD_SET(net.irc.fd, &wfd);
-
-			FD_SET(net.irc.fd, &rfd);
+            if(nxtproxy::irc.active(net.irc.fd)) {
+                if(nxtproxy::irc.want_write()) FD_SET(net.irc.fd,&wfd);
+                if(nxtproxy::irc.want_read()) FD_SET(net.irc.fd,&rfd);
+            } else {
+                if((net.irc.status & STATUS_SYNSENT) || net.irc.write.buf)
+                    FD_SET(net.irc.fd, &wfd);
+                FD_SET(net.irc.fd, &rfd);
+            }
 			net.bidMaxFd(net.irc.fd);
 		}
 		if(net.hub.fd && !net.hub.timedOut())
 		{
-			if((net.hub.status & STATUS_SYNSENT) || (net.hub.write.buf && !(net.hub.status & STATUS_REDIR)))
-				FD_SET(net.hub.fd, &wfd);
-
-			FD_SET(net.hub.fd, &rfd);
+            if(nxtproxy::hub.active(net.hub.fd)) {
+                if(nxtproxy::hub.want_write()) FD_SET(net.hub.fd,&wfd);
+                if(nxtproxy::hub.want_read()) FD_SET(net.hub.fd,&rfd);
+            } else {
+                if((net.hub.status & STATUS_SYNSENT) || (net.hub.write.buf && !(net.hub.status & STATUS_REDIR)))
+                    FD_SET(net.hub.fd, &wfd);
+                FD_SET(net.hub.fd, &rfd);
+            }
 			net.bidMaxFd(net.hub.fd);
 		}
 
@@ -383,7 +392,28 @@ int main(int argc, char *argv[])
 			ME.nextNickCheck = 0;
 		}
 
-		if(ret < 1) continue;
+        if(ret < 1) continue;
+
+        // Proxy negotiation shares select() with every other bot socket.
+        // No IRC/PASS/NICK/USER, hub password or SSL handshake is allowed
+        // to run until CONNECT has completed.
+        if(net.irc.fd && nxtproxy::irc.active(net.irc.fd)) {
+            const int fd=net.irc.fd;
+            const int st=nxtproxy::irc.step(FD_ISSET(fd,&rfd),FD_ISSET(fd,&wfd));
+            FD_CLR(fd,&rfd);
+            FD_CLR(fd,&wfd);
+            if(st==1) FD_SET(fd,&wfd);
+            else if(st<0) net.irc.close("Proxy IRC handshake rejected");
+        }
+        if(net.hub.fd && nxtproxy::hub.active(net.hub.fd)) {
+            const int fd=net.hub.fd;
+            const int st=nxtproxy::hub.step(FD_ISSET(fd,&rfd),FD_ISSET(fd,&wfd));
+            FD_CLR(fd,&rfd);
+            FD_CLR(fd,&wfd);
+            if(st==1) FD_SET(fd,&wfd);
+            else if(st<0) net.hub.close("Proxy HUB handshake rejected");
+        }
+
 
 		/* WRITE BUFFER */
 		for(i=0; i<net.max_conns; ++i)
@@ -545,7 +575,7 @@ int main(int argc, char *argv[])
 
 		/* Asycnhronius connections */
 #ifdef HAVE_SSL
-		if(net.hub.fd && net.hub.status & STATUS_SSL_HANDSHAKING)
+		if(net.hub.fd && !nxtproxy::hub.active(net.hub.fd) && (net.hub.status & STATUS_SSL_HANDSHAKING))
 		{
 			if(net.hub.status & STATUS_SYNSENT)
 			{
@@ -589,7 +619,7 @@ int main(int argc, char *argv[])
 //		DEBUG(printf("[D] net.irc.fd: %d, STATUS_SSL: %u, STATUS_SSL_HANDSHAKING: %u\n", 
 //			net.irc.fd, net.irc.status & STATUS_SSL, net.irc.status & STATUS_SSL_HANDSHAKING));
 			
-		if(net.irc.fd && net.irc.status & STATUS_SSL_HANDSHAKING)
+		if(net.irc.fd && !nxtproxy::irc.active(net.irc.fd) && (net.irc.status & STATUS_SSL_HANDSHAKING))
 		{
 			if(net.irc.status & STATUS_SYNSENT)
 			{
