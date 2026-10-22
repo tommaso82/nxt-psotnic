@@ -93,6 +93,81 @@ def exercise(kind):
                 try: proc.communicate(timeout=4)
                 except subprocess.TimeoutExpired: proc.kill();proc.wait()
 
+
+def exercise_both_channels():
+    """IRC and hub must use separate concurrent state machines and one proxy."""
+    import threading
+    with socket.socket(socket.AF_INET,socket.SOCK_STREAM) as listener:
+        listener.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+        listener.bind(("127.0.0.1",0))
+        listener.listen(4)
+        listener.settimeout(12)
+        with tempfile.TemporaryDirectory(prefix="nxt-dual-proxy-") as folder:
+            cfg=Path(folder)/"bot.cfg"
+            cfg.write_text(
+                "nick nxtbot\nident nxtbot\nhandle nxtbot\ndontfork ON\n"
+                "hub 127.0.0.1 9001 testingpass mainhub\n"
+                "server irc.example.invalid 6667\nproxy-type socks5\n"
+                "proxy-host 127.0.0.1\n"
+                f"proxy-port {listener.getsockname()[1]}\n"
+                "proxy-user testuser\nproxy-pass testpass\nproxy-scope irc,hub\n"
+            )
+            results=[]
+            failures=[]
+            def serve(conn):
+                try:
+                    with conn:
+                        conn.settimeout(9)
+                        assert exact(conn,3)==b"\x05\x01\x02"
+                        conn.sendall(b"\x05\x02")
+                        assert exact(conn,2)==b"\x01\x08"
+                        assert exact(conn,8)==b"testuser"
+                        assert exact(conn,1)==b"\x08"
+                        assert exact(conn,8)==b"testpass"
+                        conn.sendall(b"\x01\x00")
+                        assert exact(conn,3)==b"\x05\x01\x00"
+                        typ=exact(conn,1)[0]
+                        if typ==3:
+                            n=exact(conn,1)[0]
+                            host=exact(conn,n).decode("ascii")
+                        elif typ==1:
+                            host=socket.inet_ntop(socket.AF_INET,exact(conn,4))
+                        else:
+                            raise AssertionError(f"unexpected address type: {typ}")
+                        port=int.from_bytes(exact(conn,2),"big")
+                        assert (host,port) in [("irc.example.invalid",6667),("127.0.0.1",9001)]
+                        conn.sendall(b"\x05\x00\x00\x01\x7f\x00\x00\x01\x1a\x0b")
+                        line=until(conn,b"\n",limit=3000)
+                        if port==6667:
+                            assert line.startswith(b"CAP LS"),line
+                        else:
+                            assert b"Psotnic" in line,line
+                        results.append((host,port))
+                except Exception as exc:
+                    failures.append(repr(exc))
+            proc=subprocess.Popen([BIN,str(cfg)],cwd=folder,stdin=subprocess.DEVNULL,
+                                  stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            threads=[]
+            try:
+                for _ in range(2):
+                    conn,_=listener.accept()
+                    worker=threading.Thread(target=serve,args=(conn,))
+                    worker.start()
+                    threads.append(worker)
+                for thread in threads:
+                    thread.join(timeout=10)
+                    assert not thread.is_alive(),"proxy handshake stalled"
+                assert not failures,failures
+                assert set(results)=={("irc.example.invalid",6667),("127.0.0.1",9001)},results
+                print("LIVE_PROXY_OK scope=irc,hub simultaneous_sessions=2 no_direct_hub=yes",flush=True)
+            finally:
+                if proc.poll() is None:proc.kill()
+                out,err=proc.communicate(timeout=4)
+                if failures or len(results)!=2:
+                    print("BOT STDERR:\n"+err.decode(errors="replace"),file=sys.stderr)
+                    print("BOT STDOUT:\n"+out.decode(errors="replace"),file=sys.stderr)
+
 if __name__=="__main__":
     exercise("socks5")
     exercise("http")
+    exercise_both_channels()
