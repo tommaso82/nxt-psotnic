@@ -1,112 +1,58 @@
-# NXT-Psotnic
+# nxt-psotnic
 
-NXT-Psotnic is a lightweight IRC bot forked from gay-psotnic. It preserves
-the historical IRC and botnet behavior, and adds encrypted config/userlist
-files and optional global SOCKS5 / HTTP CONNECT for outgoing connections.
+nxt-psotnic is a fork of gay-psotnic 0.1.1. It retains the original IRC and botnet architecture while adding encrypted configuration and userlist files, migration from legacy Blowfish storage, and optional outbound proxy support.
 
-The executable remains named **psotnic** for compatibility with existing scripts.
-The startup/version banner displays `:: nxt-psotnic :: 0.1.0-dev` and credits
-the original gay-psotnic 0.1.1 release. Only the bot name is cyan on
-interactive terminals (set NO_COLOR=1 to disable); redirected output is plain ASCII.
-Run **./bin/psotnic** without arguments for a short getting-started summary,
-**./bin/psotnic -h** or **--help** for the full guide, or
-**./bin/psotnic config --help** / **userlist --help** for detailed file commands.
+Current version: **0.1.0-dev**. The executable is still named `psotnic`.
 
-## Build (Debian)
+## Build
 
-    sudo apt update
-    sudo apt install git build-essential perl libsodium-dev libssl-dev
-    git clone -b feature/config-crypto-v1 --single-branch https://github.com/tommaso82/nxt-psotnic.git
-    cd nxt-psotnic
-    perl configure --disable-modules
-    make dynamic
-    ./bin/psotnic --help
+On Debian, install the build dependencies and run the following from the repository root:
 
-The configure script probes libsodium by compiling and linking against -lsodium;
-pkg-config is not required.
+```sh
+sudo apt install build-essential perl libsodium-dev libssl-dev
+perl configure --disable-modules
+make dynamic
+```
 
-## Create and start a bot
+The executable is built at `bin/psotnic`.
 
-Run from the repository root:
+## Getting started
 
-    ./bin/psotnic -n
-    ./bin/psotnic -ne
+```sh
+./bin/psotnic -n
+./bin/psotnic BOT_CONFIG
+```
 
-The first command opens the normal configuration wizard; the second selects
-expert mode. In `-n` the encryption question appears first (default No); in
-`-ne` it appears after typing `exit` in expert mode. With Yes, the wizard
-prompts once for an NXTCRYPT password and confirmation just before saving,
-then writes both config (`.cfg.nxt`) and, for main bots, the newly created
-userlist (`.ul.nxt`) directly as encrypted files, using independent salts and
-nonces with the same password. No plaintext copies are written. With No,
-the original plaintext `.cfg` and `.ul` behavior is preserved. Existing
-encrypted target files are never overwritten. Custom userlist names chosen
-in expert mode gain `.nxt` when encrypted. For a main bot, the wizard can
-also create an initial userlist.
+The wizard creates a configuration; use `-ne` for expert mode. Encryption is optional and disabled by default. When enabled, the wizard writes an encrypted `.cfg.nxt` file and, if an initial userlist is created, an encrypted `.ul.nxt` file. Start the bot using the **actual filename** produced by the wizard.
 
-Start using the **actual filename** chosen in the wizard:
+Use `-d` to keep the bot in the foreground. Run `./bin/psotnic --help` for all startup options.
 
-    ./bin/psotnic mybot.cfg
+## Encrypted files
 
-To run in the foreground **without modifying the config**, use `./bin/psotnic -d mybot.cfg`.
-The `-d` switch works in both regular (`make dynamic`) and debug (`make debug`)
-builds. Both keep stdout/stderr on the terminal; only a debug build enables
-the extra internal `DEBUG()` messages. The existing `dontfork ON` config
-option continues to work independently. Normal startup forks into the
-background and closes standard streams. To verify a daemon after starting,
-inspect the `pid.<handle>` file and the configured IRC connection.
-If you run from bin/ instead, adjust the relative path: ../mybot.cfg.
+NXTCRYPT uses Argon2id and XChaCha20-Poly1305. Configuration saves and userlist autosaves retain encryption when the corresponding file is encrypted.
 
-## Encrypt or import config/userlist
+```sh
+./bin/psotnic config encrypt bot.cfg --output bot.cfg.nxt
+./bin/psotnic userlist encrypt bot.ul --output bot.ul.nxt
+```
 
-    ./bin/psotnic config encrypt mybot.cfg --output mybot.cfg.nxt
-    ./bin/psotnic mybot.cfg.nxt
+The `config` and `userlist` commands also support decryption, preview and import of legacy Blowfish files. Run `./bin/psotnic config --help` or `./bin/psotnic userlist --help` for the available options. See [encrypted storage](docs/NXT-CONFIG-CRYPTO.md) for file format, migration and password handling.
 
-Commands prompt for a password by default. Non-interactive usage can specify
---password-file FILE (protect with chmod 600) or --password-stdin.
-Avoid --password TEXT because process arguments may expose passwords.
+## Outbound proxy
 
-To inspect/decrypt an NXT-encrypted config:
+A single SOCKS5 or HTTP CONNECT proxy can route outgoing IRC connections and, optionally, outgoing botnet hub connections:
 
-    ./bin/psotnic config preview mybot.cfg.nxt
-    ./bin/psotnic config decrypt mybot.cfg.nxt --output recovered.cfg
+```text
+proxy-type socks5
+proxy-host proxy.example.net
+proxy-port 1080
+proxy-scope irc
+```
 
-To import historical Blowfish files, supply the original binary or seed file:
+Set `proxy-scope irc,hub` to include outgoing hub connections. Incoming connections remain direct; proxy failures never trigger a direct fallback. Authentication and other details are covered in [proxy configuration](docs/NXT-PROXY.md).
 
-    ./bin/psotnic config import old.cfg --binary /path/to/old-psotnic --output mybot.cfg
-    ./bin/psotnic userlist import old.ul --binary /path/to/old-psotnic --output mybot.ul
+## Notes
 
-Use --to nxt during import to create an NXT-encrypted output directly.
-Keep backups of the historical files until migration has been verified.
+Keep configuration files, userlists, passwords and seed files out of Git. The historical `.bc update` command uses a separate plaintext HTTP updater and should not be used until reviewed.
 
-## Outgoing proxy (global)
-
-Example SOCKS5 config directives:
-
-    proxy-type socks5
-    proxy-host proxy.example.net
-    proxy-port 1080
-    proxy-user username
-    proxy-pass password
-    proxy-scope irc
-
-Supported types: none (default), socks5, http (HTTP CONNECT). Credentials
-are optional. Scope 'irc' applies to all outgoing IRC servers;
-'irc,hub' also covers outgoing hub connections. Incoming sockets are not
-proxied and proxy failure does not cause a direct connection fallback.
-See docs/NXT-PROXY.md for technical and security details.
-
-Proxy credentials are not encrypted in transit to the proxy by SOCKS5
-username/password or HTTP Basic alone; use a trusted proxy connection.
-
-## Built-in command guide
-
-    ./bin/psotnic --help
-    ./bin/psotnic -h
-    ./bin/psotnic --version
-    ./bin/psotnic config --help
-    ./bin/psotnic userlist --help
-
-Please test with your real IRC/proxy environment before production.
-The historical .bc update command still uses an old plaintext HTTP updater
-and should not be used until it has been reviewed.
+This project builds on the work credited in [AUTHORS](AUTHORS) and [AUTHORS-psotnic](AUTHORS-psotnic). The original license is retained in [COPYRIGHT.GPL](COPYRIGHT.GPL).
