@@ -30,6 +30,8 @@ std::string password_arg, password_path;
 bool stdin_password=false, has_password_arg=false;
 bool bootstrap=false;
 std::string bootstrap_password;
+bool wizard_active=false;
+std::string wizard_password;
 unsigned char ul_key[crypto_aead_xchacha20poly1305_ietf_KEYBYTES]={0};
 bool ul_active=false;
 std::vector<unsigned char> ul_header;
@@ -254,6 +256,35 @@ std::string decrypt_file(const char *path) {
     }
 }
 
+void begin_wizard_encryption() {
+    // Prompt once, just before the first wizard save. Both output files
+    // derive distinct keys because seal() generates a fresh salt for each.
+    if(wizard_active || cfg_active || ul_active)
+        throw std::runtime_error("cannot start wizard encryption in an existing session");
+    std::string pass=password(true);
+    wipe(wizard_password);
+    wizard_password.swap(pass);
+    wipe(pass);
+    wipe(password_arg);has_password_arg=false;
+    wizard_active=true;
+}
+void finish_wizard_encryption() {
+    wizard_active=false;
+    wipe(wizard_password);
+}
+void wizard_write_encrypted(std::string &plain,const char *path) {
+    std::vector<unsigned char> bytes(plain.begin(),plain.end());
+    std::vector<unsigned char> sealed;
+    try {
+        sealed=seal(bytes,wizard_password); // Fresh random salt & nonce for each file
+        wipe(bytes);
+        save_new(path,sealed.data(),sealed.size()); // Never overwrite existing files
+        wipe(sealed);
+    } catch(...) {
+        wipe(bytes);wipe(sealed);
+        throw;
+    }
+}
 void begin_bootstrap() { bootstrap=true; }
 void finish_bootstrap() {
     bootstrap=false;
@@ -384,12 +415,14 @@ void save_userlist_data(std::string& plaintext,const char *path) {
     if(ul_active) {
         if(ul_path!=path) throw std::runtime_error("userlist path changed during encrypted session");
         session_save_encrypted(plaintext,path,ul_key,ul_header.data());
+    } else if(wizard_active) {
+        wizard_write_encrypted(plaintext,path);
     } else {
         plaintext_guard(path,"userlist");
         atomic_private_write(path,reinterpret_cast<const unsigned char*>(plaintext.data()),plaintext.size());
     }
 }
-bool config_encrypted_session() { return cfg_active; }
+bool config_encrypted_session() { return cfg_active || wizard_active; }
 
 void save_config_data(std::string& plaintext,const char *path) {
     ready();
@@ -398,6 +431,8 @@ void save_config_data(std::string& plaintext,const char *path) {
     if(cfg_active) {
         if(cfg_path!=path) throw std::runtime_error("config path changed during encrypted session");
         session_save_encrypted(plaintext,path,cfg_key,cfg_header.data());
+    } else if(wizard_active) {
+        wizard_write_encrypted(plaintext,path);
     } else {
         plaintext_guard(path,"config");
         atomic_private_write(path,reinterpret_cast<const unsigned char*>(plaintext.data()),plaintext.size());

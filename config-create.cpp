@@ -20,6 +20,8 @@
 
 #include "prots.h"
 #include "global-var.h"
+#include "nxt-crypto.h"
+#include <stdexcept>
 
 void expertMode();
 
@@ -514,6 +516,10 @@ void createInitialConfig(bool expMode)
 	printMessage( "Bot now runs in config creation mode" );
 	printMessage( "For usage and NXT options, run ./bin/psotnic --help from the project root or read README.md" );
 
+    // Normal wizard decides at the beginning; expert wizard decides after exit.
+    const bool encrypt_choice = expMode ? false :
+        readUserYesNo("Encrypt config and userlist with NXTCRYPT?", false);
+
     if(expMode)
     {
 	expertMode();
@@ -709,13 +715,45 @@ void createInitialConfig(bool expMode)
         else
                 config.bottype = BOT_LEAF;
 
-	string defaultcfgfile = config.nick.getValue() + string(".cfg");
+    const bool encrypted = expMode ?
+        readUserYesNo("Encrypt config and userlist with NXTCRYPT?", false) :
+        encrypt_choice;
+
+    // Point to the encrypted userlist *before* serializing the config,
+    // including when a custom userlist path was selected in expert mode.
+    if(encrypted && config.bottype != BOT_LEAF) {
+        string userlist_path = config.userlist_file.getLen() ?
+            string((const char *)config.userlist_file.getValue()) :
+            string((const char *)config.nick.getValue()) + ".ul";
+        if(userlist_path.size() < 4 ||
+           userlist_path.substr(userlist_path.size()-4) != ".nxt")
+            userlist_path += ".nxt";
+        options::event *ue=config.userlist_file.setValue("userlist",userlist_path.c_str());
+        if(!ue || !ue->ok) {
+            printError("Cannot set encrypted userlist path: %s",
+                       ue ? (const char *)ue->reason : "unknown error");
+            ::exit(1);
+        }
+    }
+
+	string defaultcfgfile = string((const char *)config.nick.getValue()) +
+        (encrypted ? ".cfg.nxt" : ".cfg");
 	readUserInput( "Where should the config file be saved?", config.file, defaultcfgfile.c_str());
+
+    if(encrypted) {
+        try {
+            nxtcrypto::begin_wizard_encryption(); // Password & confirmation once
+        } catch(const std::exception &x) {
+            printError("Cannot enable NXTCRYPT: %s",x.what());
+            ::exit(1);
+        }
+    }
 
 	e = config.save();
 	if (!e->ok)
 	{
 		printError( (const char*)e->reason );
+        if(encrypted) nxtcrypto::finish_wizard_encryption();
 		exit(1);
 	}
 	printMessage( (const char*)e->reason );
@@ -741,11 +779,21 @@ void createInitialConfig(bool expMode)
 			userlist.changePass(h->name, (char *) (const char *) pass);
 			userlist.changeFlags(h->name, "tpx", "");
 			userlist.updated(false);
-			userlist.save(config.userlist_file);
-			printMessage("userlist saved as %s", (const char *) config.userlist_file);
+            if(!userlist.save(config.userlist_file)) {
+                printError("Cannot save userlist %s", (const char *)config.userlist_file);
+                if(encrypted) nxtcrypto::finish_wizard_encryption();
+                ::exit(1);
+            }
+            printMessage("userlist saved as %s%s",
+                         (const char *)config.userlist_file,
+                         encrypted ? " (NXT encrypted)" : "");
 		}
 	}
 
+    if(encrypted) {
+        nxtcrypto::finish_wizard_encryption();
+        printMessage("NXTCRYPT setup completed; use the same password for config and userlist.");
+    }
 	exit(0);
 }
 

@@ -33,8 +33,15 @@ Run from the repository root:
     ./bin/psotnic -ne
 
 The first command opens the normal configuration wizard; the second selects
-expert mode. Save the configuration when prompted (the suggested filename is
-the selected nickname with .cfg appended). For a main bot, the wizard can
+expert mode. In `-n` the encryption question appears first (default No); in
+`-ne` it appears after typing `exit` in expert mode. With Yes, the wizard
+prompts once for an NXTCRYPT password and confirmation just before saving,
+then writes both config (`.cfg.nxt`) and, for main bots, the newly created
+userlist (`.ul.nxt`) directly as encrypted files, using independent salts and
+nonces with the same password. No plaintext copies are written. With No,
+the original plaintext `.cfg` and `.ul` behavior is preserved. Existing
+encrypted target files are never overwritten. Custom userlist names chosen
+in expert mode gain `.nxt` when encrypted. For a main bot, the wizard can
 also create an initial userlist.
 
 Start using the **actual filename** chosen in the wizard:

@@ -13,6 +13,8 @@ on:
       - 'tests/test-nxt-proxy.cpp'
       - 'tests/test-nxt-proxy-integration.py'
       - 'tests/test-nxt-debug-foreground.py'
+      - 'tests/test-nxt-wizard.py'
+      - 'config-create.cpp'
       - 'global-var.h'
       - 'class-userlist.cpp'
       - 'class-inet.cpp'
@@ -177,6 +179,8 @@ jobs:
         run: python3 tests/test-nxt-proxy-integration.py ./bin/psotnic
       - name: Real foreground -d and classic background end-to-end regression
         run: python3 tests/test-nxt-debug-foreground.py ./bin/psotnic
+      - name: Interactive -n/-ne encrypted and plaintext wizard end-to-end tests
+        run: python3 tests/test-nxt-wizard.py ./bin/psotnic
 
   real-classic-binary:
     name: Recover seed from real upstream gay-psotnic

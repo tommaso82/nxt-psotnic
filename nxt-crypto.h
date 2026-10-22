@@ -13,6 +13,9 @@ int config_command(int argc,char **argv);
 int userlist_command(int argc,char **argv);
 void begin_bootstrap();
 void finish_bootstrap();
+// The interactive -n/-ne wizard encrypts config and userlist directly from RAM.
+void begin_wizard_encryption();
+void finish_wizard_encryption();
 // Config session mirror of the userlist mechanism: the key derived at
 // startup is cached and .cfg-save re-encrypts with a fresh nonce.
 bool config_encrypted_session();
