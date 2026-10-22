@@ -332,62 +332,104 @@ int rmdirext(const char *dir)
 	return 0;
 }
 
+// Small, dependency-free CLI help; do not initialize the bot for help requests.
+static void print_nxt_short_help(const char *exe)
+{
+    printf("NXT-Psotnic - lightweight IRC bot (based on gay-psotnic)\n\n");
+    printf("Usage: %s [OPTIONS] CONFIG_FILE\n\n", exe);
+    puts("Quick start:");
+    printf("  %s -n                   Create a new bot configuration\n", exe);
+    printf("  %s bot.cfg              Start the bot with an existing config\n", exe);
+    printf("  %s -h                   Full guide (options, proxy, encryption)\n", exe);
+    puts("\nMore: config --help | userlist --help | --version");
+}
+
+static void print_nxt_config_help(const char *exe, bool userlist)
+{
+    const char *section = userlist ? "userlist" : "config";
+    printf("NXT-Psotnic - %s commands\n\n", userlist ? "userlist" : "configuration");
+    puts("Encrypt, decrypt, inspect or migrate files without starting the bot.\n");
+    puts("Commands:");
+    printf("  %s %s encrypt INPUT --output OUTPUT\n", exe, section);
+    puts("      Encrypt a plaintext file in NXTCRYPT format.");
+    printf("  %s %s decrypt INPUT --output OUTPUT\n", exe, section);
+    puts("      Decrypt an NXTCRYPT file to plaintext.");
+    printf("  %s %s preview INPUT\n", exe, section);
+    puts("      Print decrypted contents to stdout (sensitive data!).");
+    printf("  %s %s import OLD_FILE --binary OLD_PSOTNIC --output NEW_FILE\n", exe, section);
+    puts("      Recover a legacy Blowfish file using its original bot binary.");
+    puts("      Instead of --binary, you can supply --seed-file SEED_H.");
+    puts("      Use --to nxt to encrypt during import (default: --to plain).");
+    puts("\nPassword options (for encryption, decryption and NXT import):");
+    puts("  --password-file FILE     Read password from a protected file");
+    puts("  --password-stdin         Read password from standard input");
+    puts("  --password TEXT          Unsafe: password visible in process arguments");
+    puts("  No option               Prompt for the password interactively");
+    puts("\nExamples:");
+    if(userlist) {
+        printf("  %s userlist import old.ul --binary ./old-psotnic --output bot.ul\n",exe);
+        printf("  %s userlist encrypt bot.ul --output bot.ul.nxt\n",exe);
+    } else {
+        printf("  %s config encrypt bot.cfg --output bot.cfg.nxt\n",exe);
+        printf("  %s bot.cfg.nxt\n",exe);
+        printf("  %s config import old.cfg --binary ./old-psotnic --output bot.cfg\n",exe);
+    }
+    puts("\nProtect output files and keep your original backups until tested.");
+    puts("See README.md for step-by-step instructions.");
+}
+
 static void print_nxt_help(const char *exe)
 {
-    printf(
-        "NXT-Psotnic - lightweight IRC bot based on gay-psotnic\n"
-        "\n"
-        "Usage:\n"
-        "  %s [OPTIONS] CONFIG_FILE          Start the bot\n"
-        "  %s -n                             Interactive configuration wizard\n"
-        "  %s -ne                            Expert configuration wizard\n"
-        "  %s config COMMAND ...            Config encryption and migration\n"
-        "  %s userlist COMMAND ...          Userlist encryption and migration\n"
-        "\n"
-        "General options:\n"
-        "  -h, --help                        Show this help\n"
-        "  -v, --version                     Show version and build information\n"
-        "  -a CONFIG_FILE [CONFIG_FILE ...]  Add crontab entries (legacy behavior)\n"
-        "  --password-file FILE              Read the startup password from a file\n"
-        "  --password-stdin                  Read the startup password from stdin\n"
-        "  --password TEXT                   Inline password (unsafe: process listing)\n"
+    puts("NXT-Psotnic - lightweight IRC bot (based on gay-psotnic)\n");
+    printf("Usage:\n  %s [OPTIONS] CONFIG_FILE       Start the bot\n",exe);
+    printf("  %s -n                          Interactive new-config wizard\n",exe);
+    printf("  %s -ne                         Expert configuration wizard\n",exe);
+    printf("  %s config COMMAND ...         Config crypto / legacy migration\n",exe);
+    printf("  %s userlist COMMAND ...       Userlist crypto / legacy migration\n",exe);
+    puts("\nGeneral options:");
+    puts("  -h, --help                    Full help");
+    puts("  -v, --version                 Version and build information");
+    puts("  -n                            Create new configuration interactively");
+    puts("  -ne                           Create configuration (expert mode)");
+    puts("  -a FILE [FILE ...]            Add crontab entries (legacy action)");
 #ifdef HAVE_DEBUG
-        "  -d                                Debug mode (debug builds only)\n"
-        "  -T                                Historical debug config mode\n"
+    puts("  -d                            Enable debug output (debug builds)");
+    puts("  -T                            Legacy decrypted-config debug flag");
 #endif
-        "\n"
-        "Configuration commands:\n"
-        "  %s config encrypt INPUT --output OUTPUT [PASSWORD_OPTION]\n"
-        "  %s config decrypt INPUT --output OUTPUT [PASSWORD_OPTION]\n"
-        "  %s config preview INPUT [PASSWORD_OPTION]\n"
-        "  %s config import OLD.cfg --binary OLD_BOT --output NEW.cfg\n"
-        "  %s userlist import OLD.ul --binary OLD_BOT --output NEW.ul\n"
-        "  Use '%s config --help' or '%s userlist --help' for command details.\n"
-        "\n"
-        "Global outbound proxy (settings inside CONFIG_FILE, not CLI flags):\n"
-        "  proxy-type none|socks5|http      Default: none\n"
-        "  proxy-host HOST                  Required when enabled\n"
-        "  proxy-port PORT                  Required when enabled\n"
-        "  proxy-user USER                  Optional username\n"
-        "  proxy-pass PASSWORD              Optional password\n"
-        "  proxy-scope irc|irc,hub          Default: irc\n"
-        "\n"
-        "Getting started:\n"
-        "  %s -n\n"
-        "  %s bot.cfg\n"
-        "  %s config encrypt bot.cfg --output bot.cfg.nxt\n"
-        "  %s bot.cfg.nxt\n"
-        "\n"
-        "Run from the project root or give the full path to CONFIG_FILE.\n"
-        "Docs: README.md and docs/NXT-PROXY.md (in the source tree).\n",
-        exe,exe,exe,exe,exe,exe,exe,exe,exe,exe,exe,exe,exe,exe,exe,exe);
+    puts("\nStartup password options (for encrypted configs):");
+    puts("  --password-file FILE          Password read from file");
+    puts("  --password-stdin              Password read from standard input");
+    puts("  --password TEXT               Unsafe: exposed in process arguments");
+    puts("  (omitted)                     Ask interactively if needed");
+    puts("\nFile management:");
+    printf("  %s config --help              Encrypt/decrypt/import config files\n",exe);
+    printf("  %s userlist --help            Encrypt/decrypt/import userlist files\n",exe);
+    puts("\nGlobal outgoing proxy (configure INSIDE the bot config file):");
+    puts("  proxy-type none|socks5|http   'http' means HTTP CONNECT; none = direct");
+    puts("  proxy-host HOST               Hostname or IPv4/IPv6 address");
+    puts("  proxy-port PORT               Proxy TCP port");
+    puts("  proxy-user USER               Optional username");
+    puts("  proxy-pass PASSWORD           Optional password");
+    puts("  proxy-scope irc|irc,hub       All IRC servers; optionally outgoing hub");
+    puts("  Proxy errors never trigger a direct fallback.");
+    puts("  Inbound botnet/partyline connections are not proxied.");
+    puts("\nQuick start:");
+    printf("  1. %s -n\n",exe);
+    puts("     Follow the wizard and note the generated .cfg filename.");
+    printf("  2. %s bot.cfg\n",exe);
+    puts("     Set 'dontfork ON' in the config to view startup logs.");
+    printf("  3. %s config encrypt bot.cfg --output bot.cfg.nxt\n",exe);
+    printf("     %s bot.cfg.nxt\n",exe);
+    puts("\nPaths are relative to your current directory; starting from the");
+    puts("repository root is usually easiest (./bin/psotnic bot.cfg).");
+    puts("Docs: README.md, docs/NXT-PROXY.md");
 }
 
 void parse_cmdline(int argc, char *argv[])
 {
     // Help must be handled before loading config or touching the network.
     if(argc==1) {
-        print_nxt_help(argv[0]);
+        print_nxt_short_help(argv[0]);
         ::exit(0);
     }
     if(argc==2 && (!strcmp(argv[1],"-h") || !strcmp(argv[1],"--help") ||
@@ -399,9 +441,17 @@ void parse_cmdline(int argc, char *argv[])
         propaganda();
         ::exit(0);
     }
-    if(argc==3 && (!strcmp(argv[1],"config") || !strcmp(argv[1],"userlist")) &&
-       (!strcmp(argv[2],"-h") || !strcmp(argv[2],"--help"))) {
-        print_nxt_help(argv[0]);
+    // Contextual help should be useful even if no action follows the noun.
+    if((argc==2 || (argc==3 && (!strcmp(argv[2],"-h") ||
+                                      !strcmp(argv[2],"--help") ||
+                                      !strcmp(argv[2],"help")))) &&
+       (!strcmp(argv[1],"config") || !strcmp(argv[1],"userlist"))) {
+        print_nxt_config_help(argv[0], !strcmp(argv[1],"userlist"));
+        ::exit(0);
+    }
+    if(argc==3 && !strcmp(argv[1],"help") &&
+       (!strcmp(argv[2],"config") || !strcmp(argv[2],"userlist"))) {
+        print_nxt_config_help(argv[0], !strcmp(argv[2],"userlist"));
         ::exit(0);
     }
 	if(argc > 1 && !strcmp(argv[1], "config"))

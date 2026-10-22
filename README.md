@@ -5,7 +5,9 @@ the historical IRC and botnet behavior, and adds encrypted config/userlist
 files and optional global SOCKS5 / HTTP CONNECT for outgoing connections.
 
 The executable remains named **psotnic** for compatibility with existing scripts.
-Run **./bin/psotnic --help** to see the complete supported CLI.
+Run **./bin/psotnic** without arguments for a short getting-started summary,
+**./bin/psotnic -h** or **--help** for the full guide, or
+**./bin/psotnic config --help** / **userlist --help** for detailed file commands.
 
 ## Build (Debian)
 
