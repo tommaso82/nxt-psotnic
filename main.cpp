@@ -111,9 +111,15 @@ int main(int argc, char *argv[])
 	thisfile = argv[0];
 
 	memset(&rlim, 0, sizeof(rlim));
-	rlim.rlim_cur = RLIM_INFINITY;
-	rlim.rlim_max = RLIM_INFINITY;
-	setrlimit(RLIMIT_CORE, &rlim);       
+	// NXT keeps derived encryption keys in RAM for userlist autosave.
+	// Do not spill them into an unprotected crash/core dump file.
+	rlim.rlim_cur = 0;
+	rlim.rlim_max = 0;
+	if(setrlimit(RLIMIT_CORE, &rlim) != 0)
+	{
+		fprintf(stderr, "[-] Cannot disable core dumps: %s\n", strerror(errno));
+		exit(1);
+	}
 
 #ifdef HAVE_SSL
 	SSL_library_init();
