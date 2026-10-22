@@ -773,7 +773,7 @@ class CONFIG : public options
     entHost proxy_host;
     entInt proxy_port;
     entString proxy_user;
-    entString proxy_pass;
+    entProxyPassword proxy_pass;
     entWord proxy_scope;
 
 	entWord logfile;

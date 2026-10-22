@@ -470,7 +470,7 @@ CONFIG::CONFIG()
     registerObject(proxy_host = entHost("proxy-host", entHost::ipv4 | entHost::ipv6 | entHost::domain));
     registerObject(proxy_port = entInt("proxy-port", 0, 65535, 0));
     registerObject(proxy_user = entString("proxy-user", 0, 255, ""));
-    registerObject(proxy_pass = entString("proxy-pass", 0, 255, ""));
+    registerObject(proxy_pass = entProxyPassword("proxy-pass"));
     registerObject(proxy_scope = entWord("proxy-scope", 1, 16, "irc"));
 
 
