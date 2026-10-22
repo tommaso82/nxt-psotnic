@@ -6,6 +6,7 @@ on:
       - tests/bench-userlist-driver.h
       - tests/patch-benchmark.py
       - .github/workflows/benchmark-userlist.yml
+      - tests/validate-benchmark-parity.py
   workflow_dispatch:
 jobs:
   bench:
@@ -52,14 +53,5 @@ jobs:
                 "$exe" | grep BENCH_RESULT
             done
           done
-          echo "PARITY CHECK: compare plaintext serialization byte for byte"
-          for n in 100 1000 10000; do
-            classic="/tmp/ul-bench/classic-plain-$n.ul"
-            nxt="/tmp/ul-bench/nxt-plain-$n.ul"
-            if cmp -s "$classic" "$nxt"; then
-              echo "PARITY_OK users=$n bytes=$(wc -c < "$classic")"
-            else
-              echo "PARITY_DIFF users=$n original_bytes=$(wc -c < "$classic") nxt_bytes=$(wc -c < "$nxt")"
-              diff -u "$classic" "$nxt" | head -90 || true
-            fi
-          done
+          echo "SEMANTIC PARITY: ignore only per-process user creation timestamps and UL timestamp"
+          python3 tests/validate-benchmark-parity.py /tmp/ul-bench

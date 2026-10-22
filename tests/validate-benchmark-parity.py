@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+"""Verify actual UL output equivalence, ignoring only creation-time metadata."""
+import re
+import sys
+from pathlib import Path
+from itertools import zip_longest
+
+def normalize(path, expected):
+    lines=Path(path).read_bytes().splitlines(keepends=True)
+    handles=0
+    result=[]
+    for line in lines:
+        m=re.fullmatch(rb"(11 u[0-9]{6}) [0-9]+ [0-9]+( benchmark)\n",line)
+        if m:
+            handles+=1
+            line=m.group(1)+b" 0 0"+m.group(2)+b"\n"
+        if re.fullmatch(rb"82 [0-9]+\n",line):
+            line=b"82 0\n"
+        result.append(line)
+    if handles!=expected:
+        raise ValueError(f"{path}: expected {expected} handle creations; got {handles}")
+    return result
+
+def main():
+    root=Path(sys.argv[1])
+    for expected in [100,1000,10000]:
+        a=normalize(root/f"classic-plain-{expected}.ul",expected)
+        b=normalize(root/f"nxt-plain-{expected}.ul",expected)
+        if a!=b:
+            for lineno, (left,right) in enumerate(zip_longest(a,b),1):
+                if left!=right:
+                    print(f"PARITY_FAIL users={expected} first_line={lineno}",flush=True)
+                    print(f"classic={left!r}")
+                    print(f"nxt={right!r}")
+                    return 1
+        print(f"PARITY_OK users={expected} records={len(a)} handles={expected}",flush=True)
+    return 0
+
+if __name__=="__main__":
+    sys.exit(main())
