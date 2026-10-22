@@ -546,6 +546,7 @@ class inetconn
 
 	IOBUF read;
 	IOBUF write;
+	std::string *capture; // Optional in-RAM serialization target for private userlists
 
 	HANDLE *handle;
 
@@ -768,6 +769,12 @@ class CONFIG : public options
 	entHost vhost;
 	entWord userlist_file;
 	entWord botnetword;
+    entWord proxy_type;
+    entHost proxy_host;
+    entInt proxy_port;
+    entString proxy_user;
+    entProxyPassword proxy_pass;
+    entWord proxy_scope;
 
 	entWord logfile;
 	entWord handle;
@@ -824,8 +831,8 @@ class CONFIG : public options
 
 	CONFIG();
 	void polish();
-	void load(const char *file, bool decrypted=false);
-	options::event *save(bool decrypted=false);
+	void load(const char *file, bool decrypted=true);
+	options::event *save(bool decrypted=true);
 	bool checkOwnerpass(const char *str);
 };
 
@@ -1167,8 +1174,8 @@ class ul
 	void sendHandleInfo(inetconn *c, const HANDLE *h, const char *mask=NULL);
 	void sendDSetsToBots(const char *channel);
 
-	bool save(const char *file, const int cypher=1, const char *key=NULL);
-	int load(const char *file, const int cypher=1, const char *key=NULL);
+	bool save(const char *file, const int cypher=0, const char *key=NULL);
+	int load(const char *file, const int cypher=0, const char *key=NULL);
 	void update();
 	void updated(bool save=true);
 	void send(inetconn *c);

@@ -1,0 +1,217 @@
+name: NXT Config Crypto
+on:
+  push:
+    branches: [feature/config-crypto-v1]
+  pull_request:
+    paths:
+      - 'nxt-crypto.*'
+      - 'nxt-legacy.*'
+      - 'nxt-proxy.*'
+      - 'class-client.cpp'
+      - 'class-ent.cpp'
+      - 'class-ent.h'
+      - 'tests/test-nxt-proxy.cpp'
+      - 'tests/test-nxt-proxy-integration.py'
+      - 'tests/test-nxt-debug-foreground.py'
+      - 'tests/test-nxt-wizard.py'
+      - 'config-create.cpp'
+      - 'global-var.h'
+      - 'class-userlist.cpp'
+      - 'class-inet.cpp'
+      - 'main.cpp'
+      - 'tests/ul-session-test.cpp'
+      - 'tests/test-classic-upstream.sh'
+      - 'tests/legacy-fixture.cpp'
+      - 'tests/test-nxt-legacy.sh'
+      - 'config-load.cpp'
+      - 'class-options.cpp'
+      - 'classes.h'
+      - 'functions.cpp'
+      - 'defines.h'
+      - 'tests/test-nxt-banner.py'
+      - 'configure'
+      - 'tests/test.pm'
+      - 'tests/sodium.c'
+      - 'tests/test-nxt-crypto.sh'
+      - 'tests/nxt-crypto-cli-test.cpp'
+      - 'tests/cfg-session-test.cpp'
+      - 'tests/test-nxt-cfg-session.sh'
+      - '.github/workflows/nxt-config-crypto.yml'
+jobs:
+  crypto:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libsodium-dev pkg-config build-essential perl
+      - name: Configure for generated headers
+        run: perl configure --disable-modules
+      - name: Build standalone crypto CLI and fixture executables
+        run: |
+          g++ -std=c++11 -O2 -Wall -Wextra -I. nxt-crypto.cpp nxt-legacy.cpp class-blowfish.cpp tests/nxt-crypto-cli-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-crypto-test
+          g++ -std=c++11 -O2 -Wall -Wextra -I. nxt-crypto.cpp nxt-legacy.cpp class-blowfish.cpp tests/cfg-session-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-cfg-session-test
+          for opt in 0 1 2; do
+            g++ -std=c++11 -O"$opt" -I. class-blowfish.cpp tests/legacy-fixture.cpp -o "/tmp/old-psotnic-$opt"
+          done
+      - name: Roundtrip, tamper, overwrite, permission and stdin checks
+        run: sh tests/test-nxt-crypto.sh /tmp/nxt-crypto-test
+      - name: Cached-key encrypted .cfg-save, salt unchanged and nonce rotated
+        run: sh tests/test-nxt-cfg-session.sh /tmp/nxt-crypto-test /tmp/nxt-cfg-session-test
+      - name: Legacy Blowfish decoding, seed.h, ELF binary extraction and direct NXT migration
+        run: sh tests/test-nxt-legacy.sh /tmp/nxt-crypto-test /tmp/old-psotnic-0 /tmp/old-psotnic-1 /tmp/old-psotnic-2
+  proxy-protocol:
+    name: SOCKS5 and HTTP CONNECT protocol regression
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build proxy state machine test
+        run: g++ -std=c++11 -O2 -Wall -Wextra -Werror nxt-proxy.cpp tests/test-nxt-proxy.cpp -o /tmp/nxt-proxy-test
+      - name: Validate fragmented handshakes, auth, IPv6 and fail-closed behavior
+        run: /tmp/nxt-proxy-test
+  no-adns-build:
+    name: No-ADNS build (proxy-safe destination DNS)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsodium-dev pkg-config build-essential perl
+      - name: Compile without asynchronous DNS
+        run: |
+          perl configure --disable-adns --disable-modules
+          make dynamic
+      - name: Verify remote target names stay unresolved locally without ADNS
+        run: python3 tests/test-nxt-proxy-integration.py ./bin/psotnic
+  debug-build:
+    name: Debug build - historical -d and real IRC smoke test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsodium-dev build-essential perl
+      - name: Compile HAVE_DEBUG binary
+        run: |
+          perl configure --disable-modules
+          make debug
+      - name: Verify debug-only CLI and run live loopback IRC tests
+        run: |
+          ./bin/psotnic -h | grep -q 'Legacy decrypted-config debug flag'
+          python3 tests/test-nxt-debug-foreground.py ./bin/psotnic
+
+  bot-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libsodium-dev pkg-config build-essential perl
+      - name: Configure Psotnic without pkg-config
+        run: |
+          # Force pkg-config to fail if accidentally invoked: the native
+          # C++ compile+link probe must find libsodium without it.
+          mkdir -p /tmp/nxt-no-pkgconfig
+          printf '#!/bin/sh\necho "configure must not invoke pkg-config" >&2\nexit 99\n' > /tmp/nxt-no-pkgconfig/pkg-config
+          chmod +x /tmp/nxt-no-pkgconfig/pkg-config
+          PATH="/tmp/nxt-no-pkgconfig:$PATH" perl configure --disable-modules
+          grep -q -- '-lsodium' Makefile.dynamic
+      - name: Compile Psotnic
+        run: make dynamic
+      - name: Integrated bot CLI smoke test (without IRC network)
+        run: |
+          g++ -std=c++11 -O0 -I. class-blowfish.cpp tests/legacy-fixture.cpp -o /tmp/legacy-smoke-fixture
+          /tmp/legacy-smoke-fixture /tmp/legacy-smoke-old.cfg
+          ./bin/psotnic config import /tmp/legacy-smoke-old.cfg --seed-file tests/fixtures/legacy-seed.h --preview > /tmp/legacy-smoke-preview.cfg
+          grep -q 'nick legacybot' /tmp/legacy-smoke-preview.cfg
+          ./bin/psotnic config import /tmp/legacy-smoke-old.cfg --binary /tmp/legacy-smoke-fixture --output /tmp/legacy-smoke-new.nxt --to nxt --password 'synthetic CI password for smoke test'
+          ./bin/psotnic config decrypt /tmp/legacy-smoke-new.nxt --output /tmp/legacy-smoke-recovered.cfg --password 'synthetic CI password for smoke test'
+          cmp /tmp/legacy-smoke-preview.cfg /tmp/legacy-smoke-recovered.cfg
+
+      - name: Verify short startup hints, full help and context-aware commands
+        run: |
+          ./bin/psotnic > /tmp/nxt-quick.txt
+          ./bin/psotnic -h > /tmp/nxt-help.txt
+          ./bin/psotnic --help > /tmp/nxt-long-help.txt
+          ./bin/psotnic help > /tmp/nxt-help-alias.txt
+          cmp /tmp/nxt-help.txt /tmp/nxt-long-help.txt
+          cmp /tmp/nxt-help.txt /tmp/nxt-help-alias.txt
+          test -z "$(head -n 1 /tmp/nxt-quick.txt)"
+          test "$(sed -n '2p' /tmp/nxt-quick.txt)" = ':: nxt-psotnic :: 0.1.0-dev'
+          grep -q 'Quick start:' /tmp/nxt-quick.txt
+          grep -q 'Full guide' /tmp/nxt-quick.txt
+          if [ "$(wc -l < /tmp/nxt-quick.txt)" -gt 12 ]; then
+            echo 'Bare invocation is not concise'; exit 1
+          fi
+          if grep -q 'proxy-type' /tmp/nxt-quick.txt; then
+            echo 'Bare invocation unexpectedly printed full help'; exit 1
+          fi
+          if cmp -s /tmp/nxt-quick.txt /tmp/nxt-help.txt; then
+            echo 'Short help and full help are identical'; exit 1
+          fi
+          grep -q 'proxy-scope irc|irc,hub' /tmp/nxt-help.txt
+          grep -q 'config --help' /tmp/nxt-help.txt
+          ./bin/psotnic config --help > /tmp/nxt-config-help.txt
+          ./bin/psotnic config > /tmp/nxt-config-bare.txt
+          ./bin/psotnic help config > /tmp/nxt-config-alias.txt
+          cmp /tmp/nxt-config-help.txt /tmp/nxt-config-bare.txt
+          cmp /tmp/nxt-config-help.txt /tmp/nxt-config-alias.txt
+          grep -q 'config encrypt INPUT' /tmp/nxt-config-help.txt
+          grep -q 'config import OLD_FILE' /tmp/nxt-config-help.txt
+          ./bin/psotnic userlist --help > /tmp/nxt-ul-help.txt
+          ./bin/psotnic userlist > /tmp/nxt-ul-bare.txt
+          ./bin/psotnic help userlist > /tmp/nxt-ul-alias.txt
+          cmp /tmp/nxt-ul-help.txt /tmp/nxt-ul-bare.txt
+          cmp /tmp/nxt-ul-help.txt /tmp/nxt-ul-alias.txt
+          grep -q 'userlist import OLD_FILE' /tmp/nxt-ul-help.txt
+          grep -q 'userlist encrypt INPUT' /tmp/nxt-ul-help.txt
+          if cmp -s /tmp/nxt-config-help.txt /tmp/nxt-ul-help.txt; then
+            echo 'Contextual help must not be identical'; exit 1
+          fi
+          ./bin/psotnic -v > /tmp/nxt-v.txt
+          ./bin/psotnic --version > /tmp/nxt-version.txt
+          grep -Fxq ':: nxt-psotnic :: 0.1.0-dev' /tmp/nxt-v.txt
+          cmp /tmp/nxt-v.txt /tmp/nxt-version.txt
+          test "$(sed -n '2p' /tmp/nxt-quick.txt)" = "$(sed -n '2p' /tmp/nxt-v.txt)"
+          if ./bin/psotnic -not-an-option > /tmp/nxt-badout 2>&1; then
+            echo 'Unknown option unexpectedly succeeded'; exit 1
+          fi
+          grep -q 'Unknown option:' /tmp/nxt-badout
+          if grep -q 'Loading plaintext config' /tmp/nxt-badout; then
+            echo 'Unknown option was incorrectly treated as config'; exit 1
+          fi
+      - name: Verify compact startup banner, original credits and ANSI safety
+        run: python3 tests/test-nxt-banner.py ./bin/psotnic
+      - name: Exercise real NXT binary through local authenticated SOCKS5 and HTTP CONNECT
+        run: python3 tests/test-nxt-proxy-integration.py ./bin/psotnic
+      - name: Real foreground -d and classic background end-to-end regression
+        run: python3 tests/test-nxt-debug-foreground.py ./bin/psotnic
+      - name: Interactive -n/-ne encrypted and plaintext wizard end-to-end tests
+        run: python3 tests/test-nxt-wizard.py ./bin/psotnic
+
+  real-classic-binary:
+    name: Recover seed from real upstream gay-psotnic
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout NXT fork
+        uses: actions/checkout@v4
+      - name: Checkout untouched original gay-psotnic at pinned commit
+        uses: actions/checkout@v4
+        with:
+          repository: psotnic/gay-psotnic
+          ref: 2bd6db1ecd84bc8f2ae90aae58de5ee3fe0263c2
+          path: classic
+          persist-credentials: false
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsodium-dev pkg-config build-essential perl binutils
+      - name: Compile actual upstream gay-psotnic binary
+        run: |
+          test "$(git -C classic rev-parse HEAD)" = "2bd6db1ecd84bc8f2ae90aae58de5ee3fe0263c2"
+          cd classic
+          perl configure --disable-modules
+          make dynamic
+          test -x bin/psotnic
+          test -s seed.h
+          file bin/psotnic
+      - name: Compile NXT and legacy ciphertext fixture against original upstream implementation
+        run: |
+          perl configure --disable-modules
+          make dynamic
+          g++ -std=c++11 -O0 -Iclassic classic/class-blowfish.cpp tests/classic-upstream-fixture.cpp -o /tmp/classic-upstream-fixture
+          g++ -std=c++11 -O2 -I. nxt-crypto.cpp nxt-legacy.cpp class-blowfish.cpp tests/ul-session-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-ul-session-test
+      - name: Extract cfg seed from actual unstripped and stripped original psotnic binaries
+        run: sh tests/test-classic-upstream.sh ./bin/psotnic classic/bin/psotnic /tmp/classic-upstream-fixture

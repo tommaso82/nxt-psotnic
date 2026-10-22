@@ -20,6 +20,11 @@
 
 #include "prots.h"
 #include "global-var.h"
+#include "nxt-crypto.h"
+#include "nxt-proxy.h"
+#include <string>
+#include <stdexcept>
+#include <sodium.h>
 
 void CONFIG::load(const char *file, bool decrypted)
 {
@@ -35,26 +40,55 @@ void CONFIG::load(const char *file, bool decrypted)
 	inetconn f;
 
 	config.file = file;
+#ifndef HAVE_ADNS
+    nxtproxy::defer_dns=true;
+#endif
 
 	getcwd(cwd, MAX_LEN);
 
-	if(decrypted)
-		printf("[*] Loading decrypted config from '%s/%s'\n", cwd, file);
-	else
-		printf("[*] Loading config from '%s/%s'\n", cwd, file);
-
-	if(f.open(file, O_RDWR) < 0)
-	{
-		printf("[-] Cannot open config file '%s/%s': %s\n", cwd, file, strerror(errno));
+	(void)decrypted; // Historical debug flag; the format determines how we read.
+	bool encrypted = nxtcrypto::is_nxt_file(file);
+	std::string plaintext;
+	size_t pos = 0;
+	if(nxtcrypto::is_legacy_file(file)) {
+		printf("[-] Legacy Blowfish config detected. Import it before startup.\n");
 		exit(1);
 	}
-
-	if(!decrypted)
-		f.enableLameCrypt();
+	if(encrypted) {
+		try {
+			plaintext = nxtcrypto::decrypt_file(file);
+			if(plaintext.find('\0') != std::string::npos)
+				throw std::runtime_error("NUL in config");
+		} catch(const std::exception &e) {
+			printf("[-] Cannot read NXT config: %s\n", e.what());
+			exit(1);
+		}
+		printf("[*] Loading NXT encrypted config from '%s/%s'\n", cwd, file);
+	} else {
+		printf("[*] Loading plaintext config from '%s/%s'\n", cwd, file);
+		if(f.open(file, O_RDONLY) < 0) {
+			printf("[-] Cannot open config file '%s/%s': %s\n", cwd, file, strerror(errno));
+			exit(1);
+		}
+	}
 
 	while(1)
 	{
-		n = f.readln(buf, MAX_LEN);
+		if(encrypted) {
+			if(pos >= plaintext.size()) break;
+			size_t end = plaintext.find('\n', pos);
+			if(end == std::string::npos) end = plaintext.size();
+			size_t count = end - pos;
+			if(count >= MAX_LEN) {
+				printf("[-] Encrypted configuration line exceeds MAX_LEN\n");
+				exit(1);
+			}
+			memcpy(buf, plaintext.data() + pos, count);
+			buf[count] = '\0';
+			n = static_cast<int>(count);
+			if(n && buf[n-1]=='\r') buf[--n]='\0';
+			pos = (end == plaintext.size()) ? end : end + 1;
+		} else n = f.readln(buf, MAX_LEN);
 		if(n == -1) break;
 		if(!n) continue;
 
@@ -70,6 +104,31 @@ void CONFIG::load(const char *file, bool decrypted)
 			++errors;
 		}
 	}
+
+#ifndef HAVE_ADNS
+    nxtproxy::defer_dns=false;
+    // Do the classic local lookup only for truly direct connections.
+    const bool proxied=strcmp(proxy_type,"none")!=0;
+    const bool proxy_hub=proxied && !strcmp(proxy_scope,"irc,hub");
+    const auto resolve_direct=[&](entHost &host) {
+        if(host.isDefault() || !(host.getConnectionStringType(host.getValue()) & entHost::domain))return;
+        const std::string original=host.getValue();
+        options::event *event=host.setValue("host",original.c_str());
+        if(!event || !event->ok) {
+            printf("[-] Cannot resolve direct connection host: %s\n",original.c_str());
+            ++errors;
+        }
+    };
+    if(!proxied)
+        for(int i=0;i<MAX_SERVERS;++i)
+            if(!server[i].isDefault()) resolve_direct(server[i].getHost());
+    if(!proxy_hub) {
+        if(!hub.isDefault())resolve_direct(hub.getHost());
+        for(int i=0;i<MAX_ALTS;++i)
+            if(!alt[i].isDefault())resolve_direct(alt[i].getHost());
+    }
+#endif
+	if(encrypted && !plaintext.empty()) sodium_memzero(&plaintext[0], plaintext.size());
 
 	/* Basic checks */
 	if(!nick.getLen())
@@ -134,6 +193,24 @@ void CONFIG::load(const char *file, bool decrypted)
                 }
         }
 
+    if(strcmp(proxy_type,"none") && strcmp(proxy_type,"socks5") && strcmp(proxy_type,"http")) {
+        printf("[-] proxy-type must be none, socks5 or http\n");
+        exit(1);
+    }
+    if(strcmp(proxy_scope,"irc") && strcmp(proxy_scope,"irc,hub")) {
+        printf("[-] proxy-scope must be irc or irc,hub\n");
+        exit(1);
+    }
+    if(strcmp(proxy_type,"none")) {
+        if(proxy_host.isDefault() || proxy_port.value==0) {
+            printf("[-] proxy-host and proxy-port are required\n");
+            exit(1);
+        }
+        if(!proxy_user.getLen() && proxy_pass.getLen()) {
+            printf("[-] proxy-pass requires proxy-user\n");
+            exit(1);
+        }
+    }
 	polish();
 
 	if(imUp())

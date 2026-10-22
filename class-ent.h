@@ -192,6 +192,14 @@ class entString : public ent
 	virtual ~entString() { };
 };
 
+// Credential entry: keep the original value for network authentication,
+// but never reveal it through partyline config queries or set acknowledgements.
+class entProxyPassword : public entString {
+public:
+    entProxyPassword(const char *name="proxy-pass") : entString(name,0,255,"") { }
+    virtual const char *getValue() const { return getLen()?"[REDACTED]":""; }
+};
+
 class entWord : public entString
 {
 	public:

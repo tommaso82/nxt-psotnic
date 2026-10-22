@@ -1,0 +1,13 @@
+# Per-instance credentials and configuration
+seed.h
+*.cfg
+*.cfg.dec
+*.ul
+*.nxt
+*.pass
+*.key
+# Build outputs
+Makefile
+Makefile.*
+*.o
+bin/

@@ -20,6 +20,10 @@
 
 #include "prots.h"
 #include "global-var.h"
+#include "nxt-crypto.h"
+#include <sodium.h>
+#include <string>
+#include <stdexcept>
 
 //options::event ent::_event;
 
@@ -466,6 +470,13 @@ CONFIG::CONFIG()
 	registerObject(dontfork = entBool("dontfork", 0));
 	registerObject(keepnick = entBool("keepnick", 0));
 	registerObject(botnetword = entWord("botnetword", 1, 255, "###\001The\001Psotnic\001Project\001###"));
+    registerObject(proxy_type = entWord("proxy-type", 1, 12, "none"));
+    registerObject(proxy_host = entHost("proxy-host", entHost::ipv4 | entHost::ipv6 | entHost::domain));
+    registerObject(proxy_port = entInt("proxy-port", 0, 65535, 0));
+    registerObject(proxy_user = entString("proxy-user", 0, 255, ""));
+    registerObject(proxy_pass = entProxyPassword("proxy-pass"));
+    registerObject(proxy_scope = entWord("proxy-scope", 1, 16, "irc"));
+
 
 	registerObject(listenport_storage = entMult("listen"));
 	for(i=0; i<MAX_LISTENPORTS; ++i)
@@ -528,29 +539,50 @@ void CONFIG::polish()
 
 options::event *CONFIG::save(bool decrypted)
 {
-	inetconn conf;
 	char cwd[MAX_LEN];
 
 	getcwd(cwd, MAX_LEN);
 
-	if(conf.open(file, O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR) < 1)
-	{
-		_event.setError(NULL, "cannot create crypted config '%s/%s': %s\n", cwd, (const char *) file, strerror(errno));
+	if(!decrypted) {
+		_event.setError(NULL, "Legacy Blowfish encryption disabled for new configs");
 		return &_event;
 	}
+	// Serialize to RAM first (same capture path as the userlist), then a
+	// single atomic private write. When the running config is NXT encrypted
+	// the session key derived at startup re-encrypts the file in place with
+	// a fresh nonce, mirroring userlist autosave; plaintext configs are
+	// atomically replaced.
+	std::string plain;
+	inetconn conf;
+	try {
+		conf.capture = &plain;
+		// open() used to set STATUS_FILE for the classic file serializer.
+		conf.status |= STATUS_FILE;
 
-	if(!decrypted)
-		conf.enableLameCrypt();
+		ptrlist<ent>::iterator i = list.begin();
+		while(i)
+		{
+			if(!i->isDefault() && i->isPrintable())
+				conf.send("%s", i->print());
+			i++;
+		}
+		conf.capture = NULL;
 
-	ptrlist<ent>::iterator i = list.begin();
-	while(i)
-	{
-		if(!i->isDefault() && i->isPrintable())
-			conf.send("%s", i->print());
-		i++;
+		if(plain.empty())
+			throw std::runtime_error("empty configuration");
+		nxtcrypto::save_config_data(plain, file);
+	} catch(const std::exception &e) {
+		conf.capture = NULL;
+		if(!plain.empty()) sodium_memzero(&plain[0], plain.size());
+		_event.setError(NULL, "cannot save config '%s/%s': %s", cwd, (const char *) file, e.what());
+		return &_event;
 	}
+	if(!plain.empty()) sodium_memzero(&plain[0], plain.size());
 
-	_event.setOk(NULL, "config file has been saved");
+	if(nxtcrypto::config_encrypted_session())
+		_event.setOk(NULL, "config file has been saved (NXT encrypted)");
+	else
+		_event.setOk(NULL, "config file has been saved");
 	return &_event;
 }
 

@@ -21,6 +21,7 @@
 #include "prots.h"
 #include "defines.h"
 #include "global-var.h"
+#include "nxt-proxy.h"
 
 /**
  * ent
@@ -444,14 +445,19 @@ options::event *entHost::setValue(const char *arg1, const char *arg2, const bool
 			ok = true;
 #else
 			char buf[MAX_LEN];
-			ok = false;
+            // Defer IRC/HUB hostname resolution until proxy settings have
+            // been parsed. Necessary to avoid local DNS leakage without ADNS.
+            const bool deferred=nxtproxy::defer_dns && name && !strcmp(name,"host");
+            ok=deferred;
+            if(!deferred) {
  #ifdef HAVE_IPV6
-			if((typesAllowed & ipv6) && !(type & use_ipv4) && inet::gethostbyname(_arg, buf, AF_INET6))
-				ok = true;
-			else
+                if((typesAllowed & ipv6) && !(type & use_ipv4) && inet::gethostbyname(_arg, buf, AF_INET6))
+                    ok=true;
+                else
  #endif
-			if(!ok && !(type & use_ipv6) && (typesAllowed & ipv4) && inet::gethostbyname(_arg, buf, AF_INET))
-				ok = true;
+                if(!ok && !(type & use_ipv6) && (typesAllowed & ipv4) && inet::gethostbyname(_arg, buf, AF_INET))
+                    ok=true;
+            }
 #endif
 			if(ok)
 			{
@@ -465,16 +471,13 @@ options::event *entHost::setValue(const char *arg1, const char *arg2, const bool
 
 					resolve_pending = 0;
 #else
-					ip = buf;
-					switch(isValidIp(buf))
-					{
-						case 4 : if(!(type & use_ipv6))
-							 	ip4=buf;
-							break;
-						case 6 : if(!(type & use_ipv4))
-								ip6=buf;
-							break;
-					}
+                    if(!deferred) {
+                        ip=buf;
+                        switch(isValidIp(buf)) {
+                            case 4: if(!(type & use_ipv6)) ip4=buf; break;
+                            case 6: if(!(type & use_ipv4)) ip6=buf; break;
+                        }
+                    }
 #endif
 					connectionString = arg2;
 				}
