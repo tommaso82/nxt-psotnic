@@ -1,7 +1,7 @@
 name: NXT Config Crypto
 on:
   push:
-    branches: [feature/config-crypto-v1]
+    branches: [feature/config-crypto-v1, devel]
   pull_request:
     paths:
       - 'nxt-crypto.*'
