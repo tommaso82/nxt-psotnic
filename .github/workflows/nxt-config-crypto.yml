@@ -65,13 +65,14 @@ jobs:
           printf 'test password for local cache\n' > "$dir/pass"
           chmod 600 "$dir/pass"
           /tmp/nxt-crypto-test config encrypt "$dir/plain" --output "$dir/bot.nxt" --password-file "$dir/pass"
+          /usr/bin/time -f "PASSWORD_PEAK_RSS_KB=%M" /tmp/nxt-key-cache-test manual "$dir/bot.nxt" "$dir/pass"
           /tmp/nxt-key-cache-test create "$dir/bot.nxt" "$dir/pass"
           test -s "$dir/bot.nxt.nxt-key"
           test "$(stat -c %a "$dir/bot.nxt.nxt-key")" = 600
           cp "$dir/bot.nxt.nxt-key" "$dir/state1"
           /tmp/nxt-key-cache-test create "$dir/bot.nxt" "$dir/pass"
           ! cmp -s "$dir/state1" "$dir/bot.nxt.nxt-key"
-          /tmp/nxt-key-cache-test cached "$dir/bot.nxt" "$dir/pass" </dev/null
+          /usr/bin/time -f "CACHE_PEAK_RSS_KB=%M" /tmp/nxt-key-cache-test cached "$dir/bot.nxt" "$dir/pass" </dev/null
           if /tmp/nxt-crypto-test config decrypt "$dir/bot.nxt" --output "$dir/forbidden" </dev/null; then exit 1; fi
           test ! -e "$dir/forbidden"
           rm "$dir/bot.nxt.nxt-key"
