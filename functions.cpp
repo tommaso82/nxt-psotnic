@@ -468,11 +468,13 @@ void parse_cmdline(int argc, char *argv[])
     }
 	if(argc > 1 && !strcmp(argv[1], "config"))
 	{
+        nxtcrypto::finish_bootstrap();
 		int status = nxtcrypto::config_command(argc, argv);
 		::exit(status);
 	}
 	if(argc > 1 && !strcmp(argv[1], "userlist"))
 	{
+        nxtcrypto::finish_bootstrap();
 		int status = nxtcrypto::userlist_command(argc, argv);
 		::exit(status);
 	}
