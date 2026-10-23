@@ -29,6 +29,10 @@ const size_t MAXDATA=8U*1024U*1024U;
 std::string password_arg, password_path;
 bool stdin_password=false, has_password_arg=false;
 bool bootstrap=false;
+bool create_key_cache=false;
+std::string cache_path;
+bool cached_key(const char*,const unsigned char*,bool,unsigned char*);
+void write_key_cache();
 std::string bootstrap_password;
 bool wizard_active=false;
 std::string wizard_password;
@@ -197,6 +201,19 @@ std::string unseal(const std::vector<unsigned char>& in,std::string &pass,unsign
     wipe(plain);
     return text;
 }
+
+std::string unseal_cached(const std::vector<unsigned char>& in,const unsigned char *key) {
+    std::vector<unsigned char> plain(in.size()-HDR);
+    unsigned long long size=0;
+    int err=crypto_aead_xchacha20poly1305_ietf_decrypt(plain.data(),&size,NULL,
+        in.data()+HDR,in.size()-HDR,in.data(),HDR,
+        in.data()+18+crypto_pwhash_SALTBYTES,key);
+    if(err) {wipe(plain);throw std::runtime_error("cached key does not match encrypted file");}
+    std::string text(reinterpret_cast<const char*>(plain.data()),(size_t)size);
+    wipe(plain);
+    return text;
+}
+
 void usage() {
     fprintf(stderr,
         "Usage:\n"
@@ -231,10 +248,17 @@ void set_password_stdin() {
 }
 std::string decrypt_file(const char *path) {
     std::vector<unsigned char> input=load_bytes(path);
-    std::string pass=password(false);
     unsigned char key[crypto_aead_xchacha20poly1305_ietf_KEYBYTES]={0};
+    std::string pass;
     try {
-        std::string out=unseal(input,pass,key);
+        bool cached=input.size()>=HDR+crypto_aead_xchacha20poly1305_ietf_ABYTES &&
+            cached_key(path,input.data(),false,key);
+        std::string out;
+        if(cached) {
+            try {out=unseal_cached(input,key);}
+            catch(...) {sodium_memzero(key,sizeof(key));cached=false;}
+        }
+        if(!cached) {pass=password(false);out=unseal(input,pass,key);}
         if(bootstrap) {
             wipe(bootstrap_password); bootstrap_password=pass;
             // Cache the derived key so the running config can be re-encrypted
@@ -285,8 +309,13 @@ void wizard_write_encrypted(std::string &plain,const char *path) {
         throw;
     }
 }
+// The cache is an unattended-unlock credential, not a password substitute
+// for explicit config/userlist CLI operations.
+void enable_key_cache() { create_key_cache=true; }
 void begin_bootstrap() { bootstrap=true; }
 void finish_bootstrap() {
+    try {write_key_cache();}
+    catch(const std::exception &e) {fprintf(stderr,"[-] Cannot write local key cache: %s\\n",e.what());}
     bootstrap=false;
     wipe(bootstrap_password);
     wipe(password_arg);has_password_arg=false;
@@ -299,10 +328,20 @@ std::string load_userlist_data(const char *path) {
     if(bytes.size()<HDR+crypto_aead_xchacha20poly1305_ietf_ABYTES ||
        memcmp(bytes.data(),MAGIC,8)!=0)
         throw std::runtime_error("not an NXT encrypted userlist");
-    std::string pass=bootstrap_password.empty()?password(false):bootstrap_password;
+    std::string pass;
     unsigned char key[crypto_aead_xchacha20poly1305_ietf_KEYBYTES]={0};
     try {
-        std::string clear=unseal(bytes,pass,key);
+        bool cached=bytes.size()>=HDR+crypto_aead_xchacha20poly1305_ietf_ABYTES &&
+            cached_key(path,bytes.data(),true,key);
+        std::string clear;
+        if(cached) {
+            try {clear=unseal_cached(bytes,key);}
+            catch(...) {sodium_memzero(key,sizeof(key));cached=false;}
+        }
+        if(!cached) {
+            pass=bootstrap_password.empty()?password(false):bootstrap_password;
+            clear=unseal(bytes,pass,key);
+        }
         sodium_memzero(ul_key,sizeof ul_key);
         memcpy(ul_key,key,sizeof key);
         ul_header.assign(bytes.begin(),bytes.begin()+HDR);
@@ -368,6 +407,72 @@ void atomic_private_write(const char *target,
         throw;
     }
 }
+
+const unsigned char CACHE_MAGIC[8]={'N','X','T','K','E','Y','0','1'};
+const size_t CACHE_RECORD=34+32, CACHE_SIZE=8+1+16+2*CACHE_RECORD;
+void cache_mask(unsigned char *mask,const unsigned char *seed,const unsigned char *header) {
+    unsigned char input[16+34];
+    memcpy(input,seed,16);memcpy(input+16,header,34);
+    if(crypto_generichash(mask,32,input,sizeof(input),NULL,0)!=0)
+        throw std::runtime_error("cache scrambling failed");
+    sodium_memzero(input,sizeof(input));
+}
+bool cached_key(const char *path,const unsigned char *header,bool userlist,unsigned char *key) {
+    if(!bootstrap) return false;
+    if(cache_path.empty()) cache_path=std::string(path)+".nxt-key";
+    int fd=open(cache_path.c_str(),O_RDONLY|O_CLOEXEC|O_NOFOLLOW|O_NONBLOCK);
+    if(fd<0) return false;
+    struct stat st;
+    unsigned char state[CACHE_SIZE]={0};
+    bool ok=fstat(fd,&st)==0 && S_ISREG(st.st_mode) &&
+            st.st_uid==geteuid() && (st.st_mode&077)==0 &&
+            st.st_size==static_cast<off_t>(sizeof(state));
+    if(ok) {
+        size_t pos=0;
+        while(pos<sizeof(state)) {
+            ssize_t n=read(fd,state+pos,sizeof(state)-pos);
+            if(n<0 && errno==EINTR) continue;
+            if(n<=0) {ok=false;break;}
+            pos+=(size_t)n;
+        }
+    }
+    close(fd);
+    const unsigned int bit=userlist?2:1;
+    const size_t off=25+(userlist?CACHE_RECORD:0);
+    ok=ok && memcmp(state,CACHE_MAGIC,8)==0 &&
+       (state[8]&~3U)==0 && (state[8]&bit)!=0 &&
+       memcmp(state+off,header,34)==0;
+    if(ok) {
+        unsigned char mask[32];
+        cache_mask(mask,state+9,state+off);
+        for(size_t i=0;i<32;++i) key[i]=state[off+34+i]^mask[i];
+        sodium_memzero(mask,sizeof(mask));
+    }
+    sodium_memzero(state,sizeof(state));
+    return ok;
+}
+void write_key_cache() {
+    if(!create_key_cache || cache_path.empty() || (!cfg_active && !ul_active)) return;
+    unsigned char state[CACHE_SIZE]={0};
+    memcpy(state,CACHE_MAGIC,8);
+    state[8]=(cfg_active?1:0)|(ul_active?2:0);
+    randombytes_buf(state+9,16);
+    const unsigned char *headers[2]={cfg_active?cfg_header.data():NULL,
+                                     ul_active?ul_header.data():NULL};
+    const unsigned char *keys[2]={cfg_key,ul_key};
+    for(size_t n=0;n<2;++n) if(headers[n]) {
+        size_t off=25+n*CACHE_RECORD;
+        memcpy(state+off,headers[n],34);
+        unsigned char mask[32];
+        cache_mask(mask,state+9,state+off);
+        for(size_t i=0;i<32;++i) state[off+34+i]=keys[n][i]^mask[i];
+        sodium_memzero(mask,sizeof(mask));
+    }
+    try {atomic_private_write(cache_path.c_str(),state,sizeof(state));}
+    catch(...) {sodium_memzero(state,sizeof(state));throw;}
+    sodium_memzero(state,sizeof(state));
+}
+
 // Shared encrypted-session saver (config and userlist): the plaintext string
 // becomes ciphertext in-place, the stored KDF header is reused with a fresh
 // random nonce, and a detached AEAD tag avoids any full-size extra buffer.
