@@ -21,6 +21,8 @@
 #include <vector>
 
 namespace nxtcrypto {
+bool cached_key(const char*,const unsigned char*,bool,unsigned char*);
+void write_key_cache();
 namespace {
 const unsigned char MAGIC[8]={'N','X','T','C','R','Y','P','T'};
 const unsigned int OPS=3, RAM=32U*1024U*1024U;
@@ -31,8 +33,6 @@ bool stdin_password=false, has_password_arg=false;
 bool bootstrap=false;
 bool create_key_cache=false;
 std::string cache_path;
-bool cached_key(const char*,const unsigned char*,bool,unsigned char*);
-void write_key_cache();
 std::string bootstrap_password;
 bool wizard_active=false;
 std::string wizard_password;
@@ -315,7 +315,7 @@ void enable_key_cache() { create_key_cache=true; }
 void begin_bootstrap() { bootstrap=true; }
 void finish_bootstrap() {
     try {write_key_cache();}
-    catch(const std::exception &e) {fprintf(stderr,"[-] Cannot write local key cache: %s\\n",e.what());}
+    catch(const std::exception &e) {fprintf(stderr,"[-] Cannot write local key cache: %s\n",e.what());}
     bootstrap=false;
     wipe(bootstrap_password);
     wipe(password_arg);has_password_arg=false;
