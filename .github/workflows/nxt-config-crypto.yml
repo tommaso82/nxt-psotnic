@@ -56,6 +56,26 @@ jobs:
         run: sh tests/test-nxt-crypto.sh /tmp/nxt-crypto-test
       - name: Cached-key encrypted .cfg-save, salt unchanged and nonce rotated
         run: sh tests/test-nxt-cfg-session.sh /tmp/nxt-crypto-test /tmp/nxt-cfg-session-test
+      - name: Verify local key cache, randomized states and password-only CLI
+        run: |
+          g++ -std=c++11 -O2 -Wall -Wextra -I. nxt-crypto.cpp nxt-legacy.cpp class-blowfish.cpp tests/key-cache-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-key-cache-test
+          dir="$(mktemp -d)"
+          trap 'rm -rf "$dir"' EXIT
+          printf 'nick testbot\\n' > "$dir/plain"
+          printf 'test password for local cache\\n' > "$dir/pass"
+          chmod 600 "$dir/pass"
+          /tmp/nxt-crypto-test config encrypt "$dir/plain" --output "$dir/bot.nxt" --password-file "$dir/pass"
+          /tmp/nxt-key-cache-test create "$dir/bot.nxt" "$dir/pass"
+          test -s "$dir/bot.nxt.nxt-key"
+          test "$(stat -c %a "$dir/bot.nxt.nxt-key")" = 600
+          cp "$dir/bot.nxt.nxt-key" "$dir/state1"
+          /tmp/nxt-key-cache-test create "$dir/bot.nxt" "$dir/pass"
+          ! cmp -s "$dir/state1" "$dir/bot.nxt.nxt-key"
+          /tmp/nxt-key-cache-test cached "$dir/bot.nxt" "$dir/pass" </dev/null
+          if /tmp/nxt-crypto-test config decrypt "$dir/bot.nxt" --output "$dir/forbidden" </dev/null; then exit 1; fi
+          test ! -e "$dir/forbidden"
+          rm "$dir/bot.nxt.nxt-key"
+          if /tmp/nxt-key-cache-test cached "$dir/bot.nxt" "$dir/pass" </dev/null; then exit 1; fi
       - name: Legacy Blowfish decoding, seed.h, ELF binary extraction and direct NXT migration
         run: sh tests/test-nxt-legacy.sh /tmp/nxt-crypto-test /tmp/old-psotnic-0 /tmp/old-psotnic-1 /tmp/old-psotnic-2
   proxy-protocol:
