@@ -545,6 +545,8 @@ void parse_cmdline(int argc, char *argv[])
 			nxtcrypto::set_password_file(argv[++i]);
 		else if(!strcmp(argv[i], "--password-stdin"))
 			nxtcrypto::set_password_stdin();
+        else if(!strcmp(argv[i], "--key-cache"))
+            nxtcrypto::enable_key_cache();
 		else if(!strcmp(argv[i], "-n"))
 			createInitialConfig();
 
