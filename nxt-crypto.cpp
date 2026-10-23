@@ -419,6 +419,7 @@ void cache_mask(unsigned char *mask,const unsigned char *seed,const unsigned cha
 }
 bool cached_key(const char *path,const unsigned char *header,bool userlist,unsigned char *key) {
     if(!bootstrap) return false;
+    ready();
     if(cache_path.empty()) cache_path=std::string(path)+".nxt-key";
     int fd=open(cache_path.c_str(),O_RDONLY|O_CLOEXEC|O_NOFOLLOW|O_NONBLOCK);
     if(fd<0) return false;
