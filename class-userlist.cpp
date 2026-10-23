@@ -1722,6 +1722,10 @@ bool ul::save(const char *file, const int cypher, const char *key)
     inetconn stream;
     try {
         if(encrypted) {
+            struct stat previous;
+            if(::stat(file,&previous)==0 && S_ISREG(previous.st_mode) &&
+               previous.st_size>0 && previous.st_size<=8*1024*1024)
+                plain.reserve(static_cast<size_t>(previous.st_size));
             stream.capture=&plain;
             stream.status=STATUS_FILE;
         } else {
@@ -1767,6 +1771,13 @@ bool ul::save(const char *file, const int cypher, const char *key)
         return true;
     } catch(const std::exception& e) {
         if(!plain.empty()) sodium_memzero(&plain[0],plain.size());
+        if(encrypted) {
+            plain.clear();
+            plain.shrink_to_fit();
+#ifdef __GLIBC__
+            malloc_trim(0);
+#endif
+        }
         fprintf(stderr,"[-] Cannot save userlist %s: %s\n",file,e.what());
         nextSave=NOW+SAVEDELAY;
         return false;
