@@ -61,8 +61,8 @@ jobs:
           g++ -std=c++11 -O2 -Wall -Wextra -I. nxt-crypto.cpp nxt-legacy.cpp class-blowfish.cpp tests/key-cache-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-key-cache-test
           dir="$(mktemp -d)"
           trap 'rm -rf "$dir"' EXIT
-          printf 'nick testbot\\n' > "$dir/plain"
-          printf 'test password for local cache\\n' > "$dir/pass"
+          printf 'nick testbot\n' > "$dir/plain"
+          printf 'test password for local cache\n' > "$dir/pass"
           chmod 600 "$dir/pass"
           /tmp/nxt-crypto-test config encrypt "$dir/plain" --output "$dir/bot.nxt" --password-file "$dir/pass"
           /tmp/nxt-key-cache-test create "$dir/bot.nxt" "$dir/pass"
