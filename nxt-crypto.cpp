@@ -409,7 +409,8 @@ void plaintext_guard(const char *path,const char *what) {
                                  " with plaintext");
 }
 void save_userlist_data(std::string& plaintext,const char *path) {
-    ready();
+    // Plaintext saves do not need libsodium initialization.
+    if(ul_active || wizard_active) ready();
     if(plaintext.empty() || plaintext.size()>MAXDATA)
         throw std::runtime_error("invalid userlist size");
     if(ul_active) {
@@ -425,7 +426,7 @@ void save_userlist_data(std::string& plaintext,const char *path) {
 bool config_encrypted_session() { return cfg_active || wizard_active; }
 
 void save_config_data(std::string& plaintext,const char *path) {
-    ready();
+    if(cfg_active || wizard_active) ready();
     if(plaintext.empty() || plaintext.size()>MAXDATA)
         throw std::runtime_error("invalid config size");
     if(cfg_active) {
