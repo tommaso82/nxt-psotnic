@@ -539,51 +539,59 @@ void CONFIG::polish()
 
 options::event *CONFIG::save(bool decrypted)
 {
-	char cwd[MAX_LEN];
+    char cwd[MAX_LEN];
+    getcwd(cwd,MAX_LEN);
 
-	getcwd(cwd, MAX_LEN);
+    if(!decrypted) {
+        _event.setError(NULL,"Legacy Blowfish encryption disabled for new configs");
+        return &_event;
+    }
 
-	if(!decrypted) {
-		_event.setError(NULL, "Legacy Blowfish encryption disabled for new configs");
-		return &_event;
-	}
-	// Serialize to RAM first (same capture path as the userlist), then a
-	// single atomic private write. When the running config is NXT encrypted
-	// the session key derived at startup re-encrypts the file in place with
-	// a fresh nonce, mirroring userlist autosave; plaintext configs are
-	// atomically replaced.
-	std::string plain;
-	inetconn conf;
-	try {
-		conf.capture = &plain;
-		// open() used to set STATUS_FILE for the classic file serializer.
-		conf.status |= STATUS_FILE;
+    const bool encrypted=nxtcrypto::config_encrypted_session();
+    std::string plain;
+    inetconn conf;
+    try {
+        if(encrypted) {
+            conf.capture=&plain;
+            conf.status=STATUS_FILE;
+        } else {
+            nxtcrypto::plaintext_guard(file,"config");
+            conf.fd=::open(file,O_WRONLY|O_CREAT|O_TRUNC|O_NOFOLLOW,0600);
+            if(conf.fd<0) throw std::runtime_error("cannot open config");
+            conf.status=STATUS_FILE;
+            if(fchmod(conf.fd,0600)!=0) throw std::runtime_error("cannot secure config");
+        }
 
-		ptrlist<ent>::iterator i = list.begin();
-		while(i)
-		{
-			if(!i->isDefault() && i->isPrintable())
-				conf.send("%s", i->print());
-			i++;
-		}
-		conf.capture = NULL;
+        ptrlist<ent>::iterator i=list.begin();
+        while(i) {
+            if(!i->isDefault() && i->isPrintable())
+                conf.send("%s",i->print());
+            i++;
+        }
+        conf.capture=NULL;
 
-		if(plain.empty())
-			throw std::runtime_error("empty configuration");
-		nxtcrypto::save_config_data(plain, file);
-	} catch(const std::exception &e) {
-		conf.capture = NULL;
-		if(!plain.empty()) sodium_memzero(&plain[0], plain.size());
-		_event.setError(NULL, "cannot save config '%s/%s': %s", cwd, (const char *) file, e.what());
-		return &_event;
-	}
-	if(!plain.empty()) sodium_memzero(&plain[0], plain.size());
-
-	if(nxtcrypto::config_encrypted_session())
-		_event.setOk(NULL, "config file has been saved (NXT encrypted)");
-	else
-		_event.setOk(NULL, "config file has been saved");
-	return &_event;
+        if(encrypted) {
+            if(plain.empty()) throw std::runtime_error("empty configuration");
+            nxtcrypto::save_config_data(plain,file);
+        } else {
+            const bool failed=conf.status & STATUS_FILE_ERROR;
+            const int fd=conf.fd;
+            conf.fd=0;
+            if(::close(fd)!=0 || failed)
+                throw std::runtime_error("config write failed");
+        }
+    } catch(const std::exception& e) {
+        conf.capture=NULL;
+        if(!plain.empty()) sodium_memzero(&plain[0],plain.size());
+        _event.setError(NULL,"cannot save config '%s/%s': %s",cwd,(const char *)file,e.what());
+        return &_event;
+    }
+    if(!plain.empty()) sodium_memzero(&plain[0],plain.size());
+    if(encrypted)
+        _event.setOk(NULL,"config file has been saved (NXT encrypted)");
+    else
+        _event.setOk(NULL,"config file has been saved");
+    return &_event;
 }
 
 bool CONFIG::checkOwnerpass(const char *str)

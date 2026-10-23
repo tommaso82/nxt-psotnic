@@ -608,6 +608,20 @@ int inetconn::send(const char *lst, ...)
             return static_cast<int>(len+1);
         }
 
+        if((status & STATUS_FILE) && !blowfish && !(status & STATUS_REDIR)) {
+            if(status & STATUS_FILE_ERROR) return -1;
+            const size_t len=strlen(buf);
+            buf[len]='\n';
+            size_t pos=0;
+            while(pos<=len) {
+                const ssize_t n=::write(fd,buf+pos,len+1-pos);
+                if(n<0 && errno==EINTR) continue;
+                if(n<=0) { status|=STATUS_FILE_ERROR; return -1; }
+                pos+=static_cast<size_t>(n);
+            }
+            return static_cast<int>(len+1);
+        }
+
 	inetconn *conn = status & STATUS_REDIR ? net.findRedirConn(this) : this;
 
 	if(!(status & STATUS_REDIR) && !isBot() && isRegUser())

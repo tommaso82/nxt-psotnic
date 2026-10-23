@@ -291,7 +291,7 @@ void finish_bootstrap() {
     wipe(bootstrap_password);
     wipe(password_arg);has_password_arg=false;
 }
-bool userlist_encrypted_session() { return ul_active; }
+bool userlist_encrypted_session() { return ul_active || wizard_active; }
 
 std::string load_userlist_data(const char *path) {
     ready();

@@ -4,6 +4,7 @@
 namespace nxtcrypto {
 bool is_nxt_file(const char *path);
 bool is_legacy_file(const char *path);
+void plaintext_guard(const char *path,const char *what);
 void set_password_argument(const char *password);
 void set_password_file(const char *path);
 void set_password_stdin();
