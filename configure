@@ -47,7 +47,7 @@ if($help)
 
 my %targets;
 
-$targets{'dynamic'} = '-Wall -Wno-non-virtual-dtor';
+$targets{'dynamic'} = '-Os -Wall -Wno-non-virtual-dtor';
 $targets{'debug'} = '-DHAVE_DEBUG -g -fno-inline -pedantic -Wall -Wno-long-long -Wformat=2 -Wunused -Wno-non-virtual-dtor';
 
 my $filelist = "
