@@ -562,16 +562,19 @@ options::event *CONFIG::save(bool decrypted)
             if(fchmod(conf.fd,0600)!=0) throw std::runtime_error("cannot secure config");
         }
 
+        bool emitted=false;
         ptrlist<ent>::iterator i=list.begin();
         while(i) {
-            if(!i->isDefault() && i->isPrintable())
+            if(!i->isDefault() && i->isPrintable()) {
                 conf.send("%s",i->print());
+                emitted=true;
+            }
             i++;
         }
         conf.capture=NULL;
 
+        if(!emitted) throw std::runtime_error("empty configuration");
         if(encrypted) {
-            if(plain.empty()) throw std::runtime_error("empty configuration");
             nxtcrypto::save_config_data(plain,file);
         } else {
             const bool failed=conf.status & STATUS_FILE_ERROR;
