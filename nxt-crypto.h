@@ -13,6 +13,7 @@ void encrypt_plaintext_to_file(const std::string& content, const char *path);
 int config_command(int argc,char **argv);
 int userlist_command(int argc,char **argv);
 void begin_bootstrap();
+void enable_key_cache();
 void finish_bootstrap();
 // The interactive -n/-ne wizard encrypts config and userlist directly from RAM.
 void begin_wizard_encryption();
