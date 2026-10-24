@@ -635,6 +635,14 @@ void parse_cmdline(int argc, char *argv[])
 			nxtcrypto::set_password_stdin();
         else if(!strcmp(argv[i], "--key-cache"))
             nxtcrypto::enable_key_cache();
+#else
+        else if(!strcmp(argv[i], "--key-cache") ||
+                !strcmp(argv[i], "--password") ||
+                !strcmp(argv[i], "--password-file") ||
+                !strcmp(argv[i], "--password-stdin")) {
+            fprintf(stderr,"NXTCRYPT support was not compiled in: %s\n",argv[i]);
+            ::exit(1);
+        }
 #endif
 		else if(!strcmp(argv[i], "-n") || !strcmp(argv[i], "--new"))
 			createInitialConfig();

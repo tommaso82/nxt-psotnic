@@ -58,6 +58,10 @@ jobs:
         run: |
           ./bin/psotnic --help | grep -q 'config'
           ./bin/psotnic config import --help | grep -q 'Legacy'
+          for opt in --key-cache --password-file --password-stdin --password; do
+            if ./bin/psotnic "$opt" > /tmp/nxt-unsupported-out 2>&1; then exit 1; fi
+            grep -q 'NXTCRYPT support was not compiled in' /tmp/nxt-unsupported-out
+          done
           if ./bin/psotnic config encrypt missing --output out.nxt; then exit 1; fi
           ./bin/psotnic config import nonexistent --seed-file none --to nxt --output out.nxt > /tmp/unsupported.log 2>&1 && exit 1
           grep -q 'not compiled in' /tmp/unsupported.log
@@ -130,6 +134,12 @@ jobs:
           /tmp/nxt-crypto-test config encrypt "$dir/plain" --output "$dir/bot2.cfg.nxt" --password-file "$dir/pass"
           /tmp/nxt-key-cache-test create "$dir/bot2.cfg.nxt" "$dir/pass"
           test -s "$dir/bot2.key"
+          # An uppercase extension still derives a consistent cache name.
+          cp "$dir/bot.cfg.nxt" "$dir/UPPER.CFG.NXT"
+          /tmp/nxt-key-cache-test create "$dir/UPPER.CFG.NXT" "$dir/pass"
+          test -s "$dir/UPPER.key"
+          test ! -e "$dir/UPPER.CFG.NXT.key"
+          /tmp/nxt-key-cache-test cached "$dir/UPPER.CFG.NXT" "$dir/pass" </dev/null
           /tmp/nxt-key-cache-test cached "$dir/bot.cfg.nxt" "$dir/pass" </dev/null
           /tmp/nxt-key-cache-test cached "$dir/bot2.cfg.nxt" "$dir/pass" </dev/null
           rm "$dir/bot.key"

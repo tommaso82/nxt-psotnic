@@ -220,8 +220,8 @@ void usage() {
         "  psotnic config encrypt INPUT --output OUTPUT [password option]\n"
         "  psotnic config decrypt INPUT --output OUTPUT [password option]\n"
         "  psotnic config preview INPUT [password option]\n"
-        "  psotnic config import OLD.cfg --seed-file seed.h --output bot.cfg [--to plain|nxt]\n"
-        "  psotnic config import OLD.cfg --binary ./old-psotnic --preview\n"
+        "Encrypted output automatically adds .nxt when missing.\n"
+        "Plaintext output cannot use the .nxt extension.\n"
         "Password: --password-file PATH | --password-stdin | --password TEXT (unsafe)\n");
 }
 } // namespace
@@ -417,7 +417,7 @@ bool cached_key(const char *path,const unsigned char *header,bool userlist,unsig
         for(const char *suffix : {".cfg.nxt",".ul.nxt",".nxt"}) {
             const size_t len=strlen(suffix);
             if(cache_path.size()>=len &&
-               cache_path.compare(cache_path.size()-len,len,suffix)==0) {
+               !strncasecmp(cache_path.c_str()+cache_path.size()-len,suffix,len)) {
                 cache_path.resize(cache_path.size()-len);
                 break;
             }
