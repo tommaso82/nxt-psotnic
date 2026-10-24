@@ -1790,6 +1790,13 @@ int ul::load(const char *file, const int cypher, const char *key)
         fprintf(stderr,"[-] Legacy userlist load mode disabled. Run userlist import\n");
         return -1;
     }
+    // A missing replica is normal on a new SLAVE; an existing invalid file is not.
+    struct stat st;
+    if(::lstat(file,&st)<0) {
+        if(errno==ENOENT) return 0;
+        fprintf(stderr,"[-] Cannot inspect userlist %s: %s\n",file,strerror(errno));
+        exit(1);
+    }
     if(nxtcrypto::is_legacy_file(file)) {
         fprintf(stderr,"[-] Legacy encrypted userlist detected: use userlist import\n");
         exit(1);

@@ -23,6 +23,7 @@ void finish_wizard_encryption();
 bool config_encrypted_session();
 void save_config_data(std::string& content,const char *path);
 std::string load_userlist_data(const char *path);
+void prepare_missing_userlist(const char *path);
 void save_userlist_data(std::string& content,const char *path);
 bool userlist_encrypted_session();
 }
