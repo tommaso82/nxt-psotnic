@@ -461,7 +461,7 @@ static void print_nxt_help()
     puts("  -v, --version          Show version");
     puts("  -a FILE [...]          Add crontab entries (legacy)");
 #ifdef HAVE_DEBUG
-    puts("  -T                    Decrypted-config debug flag (legacy)");
+    puts("  -T                    Legacy decrypted-config debug flag");
 #endif
     puts("\nMore:");
     puts("  psotnic config --help");
