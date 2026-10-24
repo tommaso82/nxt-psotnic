@@ -411,6 +411,7 @@ static void print_nxt_help(const char *exe)
     puts("\nStartup password options (for encrypted configs):");
     puts("  --password-file FILE          Password read from file");
     puts("  --password-stdin              Password read from standard input");
+    puts("  --key-cache                   Save local keys for passwordless restarts");
     puts("  --password TEXT               Unsafe: exposed in process arguments");
     puts("  (omitted)                     Ask interactively if needed");
     puts("\nFile management:");
