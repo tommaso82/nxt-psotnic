@@ -6,6 +6,7 @@ on:
     paths:
       - 'nxt-crypto.*'
       - 'nxt-legacy.*'
+      - 'nxt-file.*'
       - 'nxt-proxy.*'
       - 'class-client.cpp'
       - 'class-ent.cpp'
@@ -48,7 +49,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Compile core without libsodium
         run: |
-          perl configure --disable-modules --disable-adns
+          test -x ./configure
+          ./configure --help | grep -q -- '--enable-nxtcrypt'
+          ./configure --disable-modules --disable-adns
           make dynamic
           ! grep -q -- '-lsodium' Makefile.dynamic
       - name: Verify CLI, import availability and encrypted-file rejection
@@ -70,6 +73,20 @@ jobs:
           ./bin/psotnic config import "$tmp/old.cfg" --binary /tmp/nxt-plain-legacy-fixture --preview > "$tmp/preview.cfg"
           cmp "$tmp/expected.cfg" "$tmp/preview.cfg"
           test "$(stat -c %a "$tmp/imported.cfg")" = 600
+      - name: Plaintext wizard, banner, foreground and proxy integration
+        run: |
+          python3 tests/test-nxt-wizard.py ./bin/psotnic --plaintext-only
+          python3 tests/test-nxt-banner.py ./bin/psotnic
+          python3 tests/test-nxt-debug-foreground.py ./bin/psotnic
+          python3 tests/test-nxt-proxy-integration.py ./bin/psotnic
+      - name: Validate case-insensitive encrypted extension protection
+        run: |
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          printf 'nick legacybot\n' > "$tmp/plain.cfg"
+          if ./bin/psotnic config import "$tmp/plain.cfg" --seed-file tests/fixtures/legacy-seed.h --output "$tmp/reject.NXT" > "$tmp/err" 2>&1; then exit 1; fi
+          grep -q 'not compiled in' "$tmp/err"
+          test ! -e "$tmp/reject.NXT"
   crypto:
     runs-on: ubuntu-24.04
     steps:
@@ -282,6 +299,20 @@ jobs:
         run: python3 tests/test-nxt-wizard.py ./bin/psotnic
       - name: Real MAIN SLAVE LEAF encrypted-userlist bootstrap and idle RSS
         run: python3 tests/test-userlist-bootstrap-live.py ./bin/psotnic
+      - name: Verify in-place NXTCRYPT build mode switches rebuild objects
+        run: |
+          crypto_sha="$(sha256sum functions.o | cut -d' ' -f1)"
+          ./configure --disable-modules
+          make dynamic
+          ! grep -q -- '-lsodium' Makefile.dynamic
+          plain_sha="$(sha256sum functions.o | cut -d' ' -f1)"
+          test "$plain_sha" != "$crypto_sha"
+          ./bin/psotnic config import --help | grep -q 'Plaintext'
+          ./configure --enable-nxtcrypt --disable-modules
+          make dynamic
+          grep -q -- '-lsodium' Makefile.dynamic
+          test "$(sha256sum functions.o | cut -d' ' -f1)" != "$plain_sha"
+          ./bin/psotnic --help | grep -q -- '--key-cache'
 
   real-classic-binary:
     name: Recover seed from real upstream gay-psotnic

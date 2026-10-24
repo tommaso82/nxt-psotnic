@@ -12,6 +12,7 @@ import tempfile
 import time
 
 BIN = str(Path(sys.argv[1]).resolve())
+PLAINTEXT_ONLY = "--plaintext-only" in sys.argv[2:]
 PASSWORD = "integration-only-test-secret-2026"
 NICK = "wiztest"
 
@@ -73,7 +74,8 @@ def create(mode, encrypted, base):
         t = Terminal(folder, mode.split())
         try:
             if mode in ("-n", "--new"):
-                t.respond("Encrypt config and userlist with NXTCRYPT?", "y" if encrypted else "")
+                if not PLAINTEXT_ONLY:
+                    t.respond("Encrypt config and userlist with NXTCRYPT?", "y" if encrypted else "")
                 t.respond("nick?", NICK)
                 t.respond("username?", NICK)
                 t.respond("realname?", "wizard integration")
@@ -95,7 +97,8 @@ def create(mode, encrypted, base):
                 t.send(f"set nick {NICK}")
                 t.send("set listen 127.0.0.1 34567 all")
                 t.send("exit")
-                t.respond("Encrypt config and userlist with NXTCRYPT?", "y" if encrypted else "")
+                if not PLAINTEXT_ONLY:
+                    t.respond("Encrypt config and userlist with NXTCRYPT?", "y" if encrypted else "")
 
             t.respond("Where should the config file be saved?", "")
             if encrypted:
@@ -144,8 +147,18 @@ def create(mode, encrypted, base):
             cfg_text = cfg.read_text()
             assert f"{NICK}" in cfg_text
             assert "ownerwiz" in ul.read_text()
+            if PLAINTEXT_ONLY:
+                invalid = cfg_text.replace(f"userlist {NICK}.ul", "userlist absent.ul.nxt")
+                assert invalid != cfg_text, "Missing userlist directive in generated config"
+                invalid_cfg = tmp / "incompatible.cfg"
+                invalid_cfg.write_text(invalid)
+                result = subprocess.run([BIN, "-d", str(invalid_cfg)], capture_output=True,
+                                        text=True, timeout=10)
+                assert result.returncode != 0, "Incompatible NXT userlist accepted"
+                assert "NXTCRYPT support was not compiled in" in result.stderr, result.stderr
+                assert "userlist" in result.stderr, result.stderr
         print(f"NXT_WIZARD_OK mode={mode} encrypted={encrypted} files=2 same_pass=yes" ,flush=True)
 
 for mode in ("-n", "-ne", "--new", "--new --expert"):
-    for encrypted in (False, True):
+    for encrypted in ((False,) if PLAINTEXT_ONLY else (False, True)):
         create(mode, encrypted, None)

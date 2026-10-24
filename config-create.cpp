@@ -766,7 +766,7 @@ void createInitialConfig(bool expMode)
 	if (!e->ok)
 	{
 		printError( (const char*)e->reason );
-        #ifdef HAVE_NXTCRYPT
+#ifdef HAVE_NXTCRYPT
         if(encrypted) nxtcrypto::finish_wizard_encryption();
 #endif
 		exit(1);
@@ -796,8 +796,8 @@ void createInitialConfig(bool expMode)
 			userlist.updated(false);
             if(!userlist.save(config.userlist_file)) {
                 printError("Cannot save userlist %s", (const char *)config.userlist_file);
-                #ifdef HAVE_NXTCRYPT
-        if(encrypted) nxtcrypto::finish_wizard_encryption();
+#ifdef HAVE_NXTCRYPT
+                if(encrypted) nxtcrypto::finish_wizard_encryption();
 #endif
                 ::exit(1);
             }

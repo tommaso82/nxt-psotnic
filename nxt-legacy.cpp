@@ -300,7 +300,10 @@ std::string legacy_decrypt(const char *file,const char *seed_file,const char *bi
 int import_common(int argc,char **argv,bool userlist) {
     if(argc<4) {fprintf(stderr,"Usage: psotnic config|userlist import OLD.cfg (--seed-file seed.h | --binary old-psotnic) [--preview | --output NEW.cfg --to plain|nxt]\n");return 1;}
     const char *seed_file=NULL, *binary=NULL, *output=NULL;
-    std::string mode="plain";bool preview=false,to_specified=false,password_option=false;
+    std::string mode="plain";bool preview=false,to_specified=false;
+#ifdef HAVE_NXTCRYPT
+    bool password_option=false;
+#endif
     try {
         for(int i=4;i<argc;++i) {
             if(!strcmp(argv[i],"--seed-file") && i+1<argc) seed_file=argv[++i];

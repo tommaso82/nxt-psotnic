@@ -23,8 +23,6 @@
 #include "nxt-file.h"
 #ifdef HAVE_NXTCRYPT
 #include "nxt-crypto.h"
-#endif
-#ifdef HAVE_NXTCRYPT
 #include <sodium.h>
 #endif
 #include <string>
@@ -600,14 +598,14 @@ options::event *CONFIG::save(bool decrypted)
         }
     } catch(const std::exception& e) {
         conf.capture=NULL;
-        #ifdef HAVE_NXTCRYPT
+#ifdef HAVE_NXTCRYPT
         if(!plain.empty()) sodium_memzero(&plain[0],plain.size());
 #endif
         _event.setError(NULL,"cannot save config '%s/%s': %s",cwd,(const char *)file,e.what());
         return &_event;
     }
-    #ifdef HAVE_NXTCRYPT
-        if(!plain.empty()) sodium_memzero(&plain[0],plain.size());
+#ifdef HAVE_NXTCRYPT
+    if(!plain.empty()) sodium_memzero(&plain[0],plain.size());
 #endif
     if(encrypted)
         _event.setOk(NULL,"config file has been saved (NXT encrypted)");
