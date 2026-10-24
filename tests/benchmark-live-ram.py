@@ -10,6 +10,7 @@ and Pss (proportional mapped memory, if available).
 import argparse
 import json
 import os
+import re
 from pathlib import Path
 import signal
 import socket
@@ -19,16 +20,19 @@ import tempfile
 import time
 
 parser=argparse.ArgumentParser()
-parser.add_argument("--classic",required=True)
+parser.add_argument("--classic")
 parser.add_argument("--nxt-min",required=True)
 parser.add_argument("--nxt-crypt",required=True)
-parser.add_argument("--classic-encrypt",required=True)
+parser.add_argument("--classic-encrypt")
+parser.add_argument("--nxt-only",action="store_true",help="Measure only the two NXT plaintext builds")
 parser.add_argument("--repeats",type=int,default=5)
 args=parser.parse_args()
 binary={k:str(Path(v).resolve()) for k,v in {
     "classic":args.classic,"nxt_min":args.nxt_min,"nxt_crypt":args.nxt_crypt,
     "classic_encrypt":args.classic_encrypt}.items()}
 assert args.repeats>=3
+if not args.nxt_only and (not args.classic or not args.classic_encrypt):
+    parser.error("--classic and --classic-encrypt are required without --nxt-only")
 passphrase="local synthetic startup benchmark password 2026"
 
 def snapshot(pid):
@@ -47,6 +51,35 @@ def snapshot(pid):
         except PermissionError:
             pass
     return result
+
+
+# Attribute memory to mapped ELF segments, libraries, heap and anonymous pages.
+# PSS is more meaningful for shared library mappings than adding their RSS.
+SMAPS_HEADER=re.compile(r"^[0-9a-f]+-[0-9a-f]+\s+\S+\s+[0-9a-f]+\s+\S+\s+\d+\s*(.*)$")
+SMAPS_KEYS=("Rss","Pss","Private_Clean","Private_Dirty","Shared_Clean","Anonymous")
+def smaps_groups(pid, exe):
+    groups={}
+    current=None
+    for line in Path(f"/proc/{pid}/smaps").read_text().splitlines():
+        match=SMAPS_HEADER.match(line)
+        if match:
+            path=match.group(1).strip().removesuffix(" (deleted)")
+            if path==exe: category="nxt_executable"
+            elif "libsodium.so" in path: category="libsodium"
+            elif path=="[heap]": category="heap"
+            elif path.startswith("[stack"): category="stack"
+            elif path.startswith("[vdso") or path.startswith("[vvar") or path.startswith("[vsyscall"):
+                category="kernel_special"
+            elif not path or path.startswith("[anon"): category="anonymous"
+            elif path.startswith("/"): category="other_files_and_libraries"
+            else: category="other"
+            current=groups.setdefault(category,{k:0 for k in SMAPS_KEYS})
+            continue
+        if current is None: continue
+        field,sep,value=line.partition(":")
+        if sep and field in SMAPS_KEYS:
+            current[field]+=int(value.strip().split()[0])
+    return groups
 
 def one(label,roundno,profile):
     with tempfile.TemporaryDirectory(prefix="nxt-live-ram-") as root:
@@ -131,7 +164,11 @@ def one(label,roundno,profile):
             pss=int(statistics.median(x["pss"] for x in stable)) if all("pss" in x for x in stable) else None
             print("RAM_SAMPLE "+json.dumps(dict(label=label,profile=profile,round=roundno,rss_kib=rss,
                   hwm_kib=hwm,pss_kib=pss,real_irc_registration=True),sort_keys=True),flush=True)
-            return dict(rss_kib=rss,hwm_kib=hwm,pss_kib=pss)
+            maps=smaps_groups(process.pid,exe) if args.nxt_only else {}
+            if args.nxt_only:
+                print("MEMORY_MAP_SAMPLE "+json.dumps(dict(profile=profile,label=label,round=roundno,
+                      categories=maps),sort_keys=True),flush=True)
+            return dict(rss_kib=rss,hwm_kib=hwm,pss_kib=pss,mappings=maps)
         except Exception as e:
             process.kill()
             output=process.communicate(timeout=5)[0].decode(errors="replace")
@@ -149,7 +186,8 @@ def one(label,roundno,profile):
                 process.kill()
                 process.communicate(timeout=4)
 
-labels=("classic-plain","nxt-plain","nxt-plain-with-crypto","classic-crypt","nxt-crypt")
+labels=(("nxt-plain","nxt-plain-with-crypto") if args.nxt_only else
+        ("classic-plain","nxt-plain","nxt-plain-with-crypto","classic-crypt","nxt-crypt"))
 profiles=("cfg-only","with-ul")
 groups={(profile,label):[] for profile in profiles for label in labels}
 for profile in profiles:
@@ -166,12 +204,33 @@ for (profile,label),rows in groups.items():
     print("RAM_MEDIAN "+json.dumps(dict(profile=profile,label=label,repeats=args.repeats,
           **medians[(profile,label)]),sort_keys=True),flush=True)
 for profile in profiles:
-    for mode,a,b in (("plain","classic-plain","nxt-plain"),
-                     ("plain_crypto_enabled","classic-plain","nxt-plain-with-crypto"),
-                     ("crypt","classic-crypt","nxt-crypt"),
-                     ("compile_toggle","nxt-plain","nxt-plain-with-crypto")):
+    pairs=(("compile_toggle","nxt-plain","nxt-plain-with-crypto"),) if args.nxt_only else (
+        ("plain","classic-plain","nxt-plain"),
+        ("plain_crypto_enabled","classic-plain","nxt-plain-with-crypto"),
+        ("crypt","classic-crypt","nxt-crypt"),
+        ("compile_toggle","nxt-plain","nxt-plain-with-crypto"))
+    for mode,a,b in pairs:
         left,right=medians[(profile,a)],medians[(profile,b)]
         delta={key:right[key]-left[key] if left[key] is not None and right[key] is not None else None for key in right}
         print("RAM_COMPARE "+json.dumps(dict(profile=profile,mode=mode,classic=a,nxt=b,
               delta_nxt_minus_classic_kib=delta),sort_keys=True),flush=True)
+if args.nxt_only:
+    for profile in profiles:
+        summaries={}
+        for label in labels:
+            rows=groups[(profile,label)]
+            cats=sorted({cat for row in rows for cat in row["mappings"]})
+            result={}
+            for cat in cats:
+                result[cat]={metric:int(statistics.median(
+                    row["mappings"].get(cat,{}).get(metric,0) for row in rows))
+                    for metric in SMAPS_KEYS}
+            summaries[label]=result
+            print("MEMORY_MAP_MEDIAN "+json.dumps(dict(profile=profile,label=label,
+                  categories=result),sort_keys=True),flush=True)
+        a,b=(summaries[x] for x in labels)
+        delta={cat:{m:b.get(cat,{}).get(m,0)-a.get(cat,{}).get(m,0)
+                    for m in SMAPS_KEYS} for cat in set(a)|set(b)}
+        print("MEMORY_MAP_DELTA "+json.dumps(dict(profile=profile,
+              delta_crypto_enabled_minus_minimal=delta),sort_keys=True),flush=True)
 print("LIVE_REAL_BOT_RAM_BENCH_OK",flush=True)
