@@ -64,19 +64,20 @@ jobs:
           printf 'nick testbot\n' > "$dir/plain"
           printf 'test password for local cache\n' > "$dir/pass"
           chmod 600 "$dir/pass"
-          /tmp/nxt-crypto-test config encrypt "$dir/plain" --output "$dir/bot.nxt" --password-file "$dir/pass"
-          /usr/bin/time -f "PASSWORD_PEAK_RSS_KB=%M" /tmp/nxt-key-cache-test manual "$dir/bot.nxt" "$dir/pass"
-          /tmp/nxt-key-cache-test create "$dir/bot.nxt" "$dir/pass"
-          test -s "$dir/bot.nxt.nxt-key"
-          test "$(stat -c %a "$dir/bot.nxt.nxt-key")" = 600
-          cp "$dir/bot.nxt.nxt-key" "$dir/state1"
-          /tmp/nxt-key-cache-test create "$dir/bot.nxt" "$dir/pass"
-          ! cmp -s "$dir/state1" "$dir/bot.nxt.nxt-key"
-          /usr/bin/time -f "CACHE_PEAK_RSS_KB=%M" /tmp/nxt-key-cache-test cached "$dir/bot.nxt" "$dir/pass" </dev/null
-          if /tmp/nxt-crypto-test config decrypt "$dir/bot.nxt" --output "$dir/forbidden" </dev/null; then exit 1; fi
+          /tmp/nxt-crypto-test config encrypt "$dir/plain" --output "$dir/bot.cfg.nxt" --password-file "$dir/pass"
+          /usr/bin/time -f "PASSWORD_PEAK_RSS_KB=%M" /tmp/nxt-key-cache-test manual "$dir/bot.cfg.nxt" "$dir/pass"
+          /tmp/nxt-key-cache-test create "$dir/bot.cfg.nxt" "$dir/pass"
+          test -s "$dir/bot.key"
+          test ! -e "$dir/bot.cfg.nxt.nxt-key"
+          test "$(stat -c %a "$dir/bot.key")" = 600
+          cp "$dir/bot.key" "$dir/state1"
+          /tmp/nxt-key-cache-test create "$dir/bot.cfg.nxt" "$dir/pass"
+          ! cmp -s "$dir/state1" "$dir/bot.key"
+          /usr/bin/time -f "CACHE_PEAK_RSS_KB=%M" /tmp/nxt-key-cache-test cached "$dir/bot.cfg.nxt" "$dir/pass" </dev/null
+          if /tmp/nxt-crypto-test config decrypt "$dir/bot.cfg.nxt" --output "$dir/forbidden" </dev/null; then exit 1; fi
           test ! -e "$dir/forbidden"
-          rm "$dir/bot.nxt.nxt-key"
-          if /tmp/nxt-key-cache-test cached "$dir/bot.nxt" "$dir/pass" </dev/null; then exit 1; fi
+          rm "$dir/bot.key"
+          if /tmp/nxt-key-cache-test cached "$dir/bot.cfg.nxt" "$dir/pass" </dev/null; then exit 1; fi
       - name: Legacy Blowfish decoding, seed.h, ELF binary extraction and direct NXT migration
         run: sh tests/test-nxt-legacy.sh /tmp/nxt-crypto-test /tmp/old-psotnic-0 /tmp/old-psotnic-1 /tmp/old-psotnic-2
   proxy-protocol:
