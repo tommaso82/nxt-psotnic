@@ -32,4 +32,17 @@ cmp "$tmp/bot.cfg" "$tmp/stdin.cfg"
 "$bin" config encrypt "$tmp/bot.cfg" --output "$tmp/argument.nxt" --password 'CLI test passphrase 2026'
 "$bin" config decrypt "$tmp/argument.nxt" --output "$tmp/argument.cfg" --password 'CLI test passphrase 2026'
 cmp "$tmp/bot.cfg" "$tmp/argument.cfg"
+"$bin" config encrypt "$tmp/bot.cfg" --output "$tmp/auto" --password-file "$tmp/valid.pass"
+test -f "$tmp/auto.nxt"
+test ! -e "$tmp/auto"
+"$bin" config decrypt "$tmp/auto.nxt" --output "$tmp/auto.cfg" --password-file "$tmp/valid.pass"
+cmp "$tmp/bot.cfg" "$tmp/auto.cfg"
+if "$bin" config decrypt "$tmp/auto.nxt" --output "$tmp/plain.nxt" --password-file "$tmp/valid.pass"; then
+  echo 'Plaintext .nxt output accepted' >&2; exit 1
+fi
+test ! -e "$tmp/plain.nxt"
+"$bin" userlist encrypt "$tmp/bot.cfg" --output "$tmp/userlist" --password-file "$tmp/valid.pass"
+test -f "$tmp/userlist.nxt"
+"$bin" userlist decrypt "$tmp/userlist.nxt" --output "$tmp/userlist.ul" --password-file "$tmp/valid.pass"
+cmp "$tmp/bot.cfg" "$tmp/userlist.ul"
 echo '[+] NXT Crypt standalone tests passed'

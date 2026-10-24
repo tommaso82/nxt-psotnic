@@ -75,4 +75,16 @@ test "$(stat -c %a "$tmp/userlist.nxt")" = 600
 test -z "$(find "$tmp" -name '*.tmp-*' -print -quit)"
 
 
+# Userlist imports share the same filename/format rules as configs.
+"$nxt" userlist import "$tmp/real-classic.ul" --seed-file classic/seed.h --output "$tmp/auto.ul.nxt" --password-file "$tmp/ul.pass"
+"$nxt" userlist decrypt "$tmp/auto.ul.nxt" --output "$tmp/auto.ul" --password-file "$tmp/ul.pass"
+printf '# classic userlist\n21 42\n82 1700000000\n' > "$tmp/original-expected.ul"
+cmp "$tmp/original-expected.ul" "$tmp/auto.ul"
+"$nxt" userlist import "$tmp/real-classic.ul" --seed-file classic/seed.h --to nxt --output "$tmp/appended.ul" --password-file "$tmp/ul.pass"
+test -f "$tmp/appended.ul.nxt"
+test ! -e "$tmp/appended.ul"
+if "$nxt" userlist import "$tmp/real-classic.ul" --seed-file classic/seed.h --to plain --output "$tmp/plain.ul.nxt"; then
+  echo 'Plaintext userlist with .nxt extension accepted' >&2; exit 1
+fi
+test ! -e "$tmp/plain.ul.nxt"
 echo '[+] SUCCESS: recovered the correct cfg and ul seeds from genuinely compiled gay-psotnic binaries'

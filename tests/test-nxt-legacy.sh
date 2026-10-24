@@ -37,4 +37,26 @@ if "$bin" config import "$tmp/old.cfg" --seed-file tests/fixtures/legacy-seed.h 
 fi
 after="$(sha256sum "$tmp/old.cfg" | awk '{print $1}')"
 test "$before" = "$after"
+# .nxt selects encrypted output unless the format is explicitly specified.
+"$bin" config import "$tmp/old.cfg" --seed-file tests/fixtures/legacy-seed.h --output "$tmp/inferred.cfg.nxt" --password-file "$tmp/new.pass"
+"$bin" config decrypt "$tmp/inferred.cfg.nxt" --output "$tmp/inferred.cfg" --password-file "$tmp/new.pass"
+cmp "$tmp/expected.cfg" "$tmp/inferred.cfg"
+"$bin" config import "$tmp/old.cfg" --seed-file tests/fixtures/legacy-seed.h --to nxt --output "$tmp/appended.cfg" --password-file "$tmp/new.pass"
+test -f "$tmp/appended.cfg.nxt"
+test ! -e "$tmp/appended.cfg"
+"$bin" config import "$tmp/old.cfg" --seed-file tests/fixtures/legacy-seed.h --to nxt --output "$tmp/exact.nxt" --password-file "$tmp/new.pass"
+test -f "$tmp/exact.nxt"
+test ! -e "$tmp/exact.nxt.nxt"
+if "$bin" config import "$tmp/old.cfg" --seed-file tests/fixtures/legacy-seed.h --to plain --output "$tmp/reject.nxt"; then
+  echo 'Contradictory plaintext extension accepted' >&2; exit 1
+fi
+test ! -e "$tmp/reject.nxt"
+if "$bin" config import "$tmp/old.cfg" --seed-file tests/fixtures/legacy-seed.h --preview --to nxt > "$tmp/bad-preview"; then
+  echo 'Preview with --to accepted' >&2; exit 1
+fi
+test ! -s "$tmp/bad-preview"
+if "$bin" config import "$tmp/old.cfg" --seed-file tests/fixtures/legacy-seed.h --preview --output "$tmp/reject.cfg"; then
+  echo 'Preview with --output accepted' >&2; exit 1
+fi
+test ! -e "$tmp/reject.cfg"
 echo '[+] Legacy importer tests passed'

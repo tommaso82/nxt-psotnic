@@ -21,7 +21,7 @@ New outputs are created with mode `0600` and are not allowed to overwrite existi
 ./bin/psotnic config import old.cfg --binary ./old-psotnic --output bot.cfg.nxt --to nxt
 ```
 
-Use `userlist import` for old userlists, or `--seed-file FILE` instead of `--binary` when the original seed is available. `--to nxt` encrypts the recovered content without writing a plaintext intermediate file; the default output format is plaintext.
+Use `userlist import` for old userlists, or `--seed-file FILE` instead of `--binary` when the original seed is available. `--to nxt` encrypts the recovered content without writing a plaintext intermediate file. Without `--to`, an `.nxt` output name selects encryption; other names default to plaintext. Encrypted outputs acquire `.nxt` when missing, while plaintext outputs cannot use that extension. `--preview` cannot be combined with `--output` or `--to`.
 
 The importer reads but never executes the supplied binary. Binary seed recovery is heuristic, supports tested GCC x86-64 ELF patterns, and may fail with other builds. Prefer the original seed file when available. Keep legacy backups until the converted files have been verified.
 
