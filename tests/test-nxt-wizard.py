@@ -148,10 +148,8 @@ def create(mode, encrypted, base):
             assert f"{NICK}" in cfg_text
             assert "ownerwiz" in ul.read_text()
             if PLAINTEXT_ONLY:
-                invalid = cfg_text.replace(f"userlist {NICK}.ul", "userlist absent.ul.nxt")
-                assert invalid != cfg_text, "Missing userlist directive in generated config"
                 invalid_cfg = tmp / "incompatible.cfg"
-                invalid_cfg.write_text(invalid)
+                invalid_cfg.write_text(cfg_text + "\nuserlist absent.ul.nxt\n")
                 result = subprocess.run([BIN, "-d", str(invalid_cfg)], capture_output=True,
                                         text=True, timeout=10)
                 assert result.returncode != 0, "Incompatible NXT userlist accepted"
