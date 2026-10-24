@@ -194,8 +194,9 @@ sub getGccOptions
     # -lsodium to the linker flags only when needed. pkg-config is optional.
     if($enable_nxtcrypt) {
         tryCompile("${cc_prefix}g++", 'sodium.c', '-lsodium');
-        if(!$have{'sodium.c'})
+        if(!$have{'sodium.c'}) {
             die "[-] libsodium development headers or library not found (or incompatible). Install libsodium-dev and retry.\n";
+        }
     }
 	
 	return ($cflags, $lflags);
