@@ -9,8 +9,12 @@ Current version: **0.1.0-dev**. The executable is still named `psotnic`.
 On Debian, install the build dependencies and run the following from the repository root:
 
 ```sh
-sudo apt install build-essential perl libsodium-dev libssl-dev
+sudo apt install build-essential perl libssl-dev
 perl configure --disable-modules
+make dynamic
+
+# Optional encrypted storage (requires libsodium-dev):
+perl configure --enable-nxtcrypt --disable-modules
 make dynamic
 ```
 
@@ -23,13 +27,13 @@ The executable is built at `bin/psotnic`.
 ./bin/psotnic BOT_CONFIG
 ```
 
-The wizard creates a configuration; use `-ne` for expert mode. Configurations and userlists are plaintext by default. Enabling NXTCRYPT in the wizard creates an encrypted `.cfg.nxt` file and, if an initial userlist is created, an encrypted `.ul.nxt` file. Start the bot using the **actual filename** produced by the wizard.
+The wizard creates a configuration; use `-ne` for expert mode. Configurations and userlists are plaintext by default. When built with `--enable-nxtcrypt`, enabling encryption in the wizard creates an encrypted `.cfg.nxt` file and, if an initial userlist is created, an encrypted `.ul.nxt` file. Start the bot using the **actual filename** produced by the wizard.
 
 Use `-d` to keep the bot in the foreground. Run `./bin/psotnic --help` for all startup options.
 
 ## Encrypted files
 
-NXTCRYPT uses Argon2id and XChaCha20-Poly1305. Configuration saves and userlist autosaves retain encryption when the corresponding file is encrypted.
+NXTCRYPT is optional at build time (`--enable-nxtcrypt` requires `libsodium-dev`). Legacy Blowfish import remains available in the default build. NXTCRYPT uses Argon2id and XChaCha20-Poly1305. Configuration saves and userlist autosaves retain encryption when the corresponding file is encrypted.
 
 ```sh
 ./bin/psotnic config encrypt bot.cfg --output bot.cfg.nxt

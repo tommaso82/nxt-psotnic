@@ -1,7 +1,7 @@
 name: NXT Config Crypto
 on:
   push:
-    branches: [devel]
+    branches: [devel, 'test/optional-nxtcrypt']
   pull_request:
     paths:
       - 'nxt-crypto.*'
@@ -41,18 +41,35 @@ on:
       - 'tests/key-cache-test.cpp'
       - '.github/workflows/nxt-config-crypto.yml'
 jobs:
+  core-no-sodium:
+    name: Plaintext and legacy import without libsodium
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile core without libsodium
+        run: |
+          perl configure --disable-modules --disable-adns --disable-ssl
+          make dynamic
+          ! grep -q -- '-lsodium' Makefile.dynamic
+      - name: Verify CLI, import availability and encrypted-file rejection
+        run: |
+          ./bin/psotnic --help | grep -q 'config'
+          ./bin/psotnic config import --help | grep -q 'Legacy'
+          if ./bin/psotnic config encrypt missing --output out.nxt; then exit 1; fi
+          ./bin/psotnic config import nonexistent --seed-file none --to nxt --output out.nxt > /tmp/unsupported.log 2>&1 && exit 1
+          grep -q 'not compiled in' /tmp/unsupported.log
   crypto:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y libsodium-dev pkg-config build-essential perl
       - name: Configure for generated headers
-        run: perl configure --disable-modules
+        run: perl configure --enable-nxtcrypt --disable-modules
       - name: Build standalone crypto CLI and fixture executables
         run: |
-          g++ -std=c++11 -O2 -Wall -Wextra -I. nxt-crypto.cpp nxt-legacy.cpp class-blowfish.cpp tests/nxt-crypto-cli-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-crypto-test
-          g++ -std=c++11 -O2 -Wall -Wextra -I. nxt-crypto.cpp nxt-legacy.cpp class-blowfish.cpp tests/cfg-session-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-cfg-session-test
-          g++ -std=c++11 -O2 -Wall -Wextra -I. nxt-crypto.cpp nxt-legacy.cpp class-blowfish.cpp tests/userlist-bootstrap-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-ul-bootstrap-test
+          g++ -std=c++11 -O2 -Wall -Wextra -I. -DHAVE_NXTCRYPT nxt-crypto.cpp nxt-file.cpp nxt-legacy.cpp class-blowfish.cpp tests/nxt-crypto-cli-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-crypto-test
+          g++ -std=c++11 -O2 -Wall -Wextra -I. -DHAVE_NXTCRYPT nxt-crypto.cpp nxt-file.cpp nxt-legacy.cpp class-blowfish.cpp tests/cfg-session-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-cfg-session-test
+          g++ -std=c++11 -O2 -Wall -Wextra -I. -DHAVE_NXTCRYPT nxt-crypto.cpp nxt-file.cpp nxt-legacy.cpp class-blowfish.cpp tests/userlist-bootstrap-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-ul-bootstrap-test
           for opt in 0 1 2; do
             g++ -std=c++11 -O"$opt" -I. class-blowfish.cpp tests/legacy-fixture.cpp -o "/tmp/old-psotnic-$opt"
           done
@@ -62,7 +79,7 @@ jobs:
         run: sh tests/test-nxt-cfg-session.sh /tmp/nxt-crypto-test /tmp/nxt-cfg-session-test
       - name: Verify local key cache, randomized states and password-only CLI
         run: |
-          g++ -std=c++11 -O2 -Wall -Wextra -I. nxt-crypto.cpp nxt-legacy.cpp class-blowfish.cpp tests/key-cache-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-key-cache-test
+          g++ -std=c++11 -O2 -Wall -Wextra -I. -DHAVE_NXTCRYPT nxt-crypto.cpp nxt-file.cpp nxt-legacy.cpp class-blowfish.cpp tests/key-cache-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-key-cache-test
           dir="$(mktemp -d)"
           trap 'rm -rf "$dir"' EXIT
           printf 'nick testbot\n' > "$dir/plain"
@@ -137,7 +154,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libsodium-dev pkg-config build-essential perl
       - name: Compile without asynchronous DNS
         run: |
-          perl configure --disable-adns --disable-modules
+          perl configure --enable-nxtcrypt --disable-adns --disable-modules
           make dynamic
       - name: Verify remote target names stay unresolved locally without ADNS
         run: python3 tests/test-nxt-proxy-integration.py ./bin/psotnic
@@ -150,7 +167,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libsodium-dev build-essential perl
       - name: Compile HAVE_DEBUG binary
         run: |
-          perl configure --disable-modules
+          perl configure --enable-nxtcrypt --disable-modules
           make debug
       - name: Verify debug-only CLI and run live loopback IRC tests
         run: |
@@ -169,7 +186,7 @@ jobs:
           mkdir -p /tmp/nxt-no-pkgconfig
           printf '#!/bin/sh\necho "configure must not invoke pkg-config" >&2\nexit 99\n' > /tmp/nxt-no-pkgconfig/pkg-config
           chmod +x /tmp/nxt-no-pkgconfig/pkg-config
-          PATH="/tmp/nxt-no-pkgconfig:$PATH" perl configure --disable-modules
+          PATH="/tmp/nxt-no-pkgconfig:$PATH" perl configure --enable-nxtcrypt --disable-modules
           grep -q -- '-lsodium' Makefile.dynamic
       - name: Compile Psotnic
         run: make dynamic
@@ -273,16 +290,16 @@ jobs:
         run: |
           test "$(git -C classic rev-parse HEAD)" = "2bd6db1ecd84bc8f2ae90aae58de5ee3fe0263c2"
           cd classic
-          perl configure --disable-modules
+          perl configure --enable-nxtcrypt --disable-modules
           make dynamic
           test -x bin/psotnic
           test -s seed.h
           file bin/psotnic
       - name: Compile NXT and legacy ciphertext fixture against original upstream implementation
         run: |
-          perl configure --disable-modules
+          perl configure --enable-nxtcrypt --disable-modules
           make dynamic
           g++ -std=c++11 -O0 -Iclassic classic/class-blowfish.cpp tests/classic-upstream-fixture.cpp -o /tmp/classic-upstream-fixture
-          g++ -std=c++11 -O2 -I. nxt-crypto.cpp nxt-legacy.cpp class-blowfish.cpp tests/ul-session-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-ul-session-test
+          g++ -std=c++11 -O2 -I. -DHAVE_NXTCRYPT nxt-crypto.cpp nxt-file.cpp nxt-legacy.cpp class-blowfish.cpp tests/ul-session-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-ul-session-test
       - name: Extract cfg seed from actual unstripped and stripped original psotnic binaries
         run: sh tests/test-classic-upstream.sh ./bin/psotnic classic/bin/psotnic /tmp/classic-upstream-fixture
