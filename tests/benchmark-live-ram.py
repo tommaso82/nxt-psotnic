@@ -3,7 +3,7 @@
 
 All binaries use make debug. The original only supports plaintext config with
 its historical -T debug switch. Both bot implementations use the same text
-directives, plain userlist and local dummy IRC endpoint. Each invocation is
+directives, equivalent userlist content and local dummy IRC endpoint. Each invocation is
 isolated in a new directory. Report VmRSS (resident), VmHWM (startup peak),
 and Pss (proportional mapped memory, if available).
 """
@@ -91,7 +91,7 @@ def one(label,roundno,profile):
             subprocess.run([binary["classic_encrypt"],str(plain),str(encrypted)],
                            check=True,capture_output=True,timeout=10)
             cmd=[exe,"-d",encrypted.name]
-        elif label=="nxt-plain":
+        elif label in ("nxt-plain","nxt-plain-with-crypto"):
             cmd=[exe,"-d","bot.cfg"]
         elif label=="nxt-crypt":
             encrypted=folder/"bot.cfg.nxt"
@@ -149,7 +149,7 @@ def one(label,roundno,profile):
                 process.kill()
                 process.communicate(timeout=4)
 
-labels=("classic-plain","nxt-plain","classic-crypt","nxt-crypt")
+labels=("classic-plain","nxt-plain","nxt-plain-with-crypto","classic-crypt","nxt-crypt")
 profiles=("cfg-only","with-ul")
 groups={(profile,label):[] for profile in profiles for label in labels}
 for profile in profiles:
@@ -167,7 +167,9 @@ for (profile,label),rows in groups.items():
           **medians[(profile,label)]),sort_keys=True),flush=True)
 for profile in profiles:
     for mode,a,b in (("plain","classic-plain","nxt-plain"),
-                     ("crypt","classic-crypt","nxt-crypt")):
+                     ("plain_crypto_enabled","classic-plain","nxt-plain-with-crypto"),
+                     ("crypt","classic-crypt","nxt-crypt"),
+                     ("compile_toggle","nxt-plain","nxt-plain-with-crypto")):
         left,right=medians[(profile,a)],medians[(profile,b)]
         delta={key:right[key]-left[key] if left[key] is not None and right[key] is not None else None for key in right}
         print("RAM_COMPARE "+json.dumps(dict(profile=profile,mode=mode,classic=a,nxt=b,
