@@ -22,17 +22,20 @@ import time
 parser=argparse.ArgumentParser()
 parser.add_argument("--classic")
 parser.add_argument("--nxt-min",required=True)
-parser.add_argument("--nxt-crypt",required=True)
+parser.add_argument("--nxt-crypt")
 parser.add_argument("--classic-encrypt")
 parser.add_argument("--nxt-only",action="store_true",help="Measure only the two NXT plaintext builds")
+parser.add_argument("--classic-vs-minimal",action="store_true",help="Inspect gay-psotnic versus NXT without NXTCRYPT")
 parser.add_argument("--repeats",type=int,default=5)
 args=parser.parse_args()
 binary={k:str(Path(v).resolve()) for k,v in {
     "classic":args.classic,"nxt_min":args.nxt_min,"nxt_crypt":args.nxt_crypt,
     "classic_encrypt":args.classic_encrypt}.items() if v is not None}
 assert args.repeats>=3
-if not args.nxt_only and (not args.classic or not args.classic_encrypt):
-    parser.error("--classic and --classic-encrypt are required without --nxt-only")
+if args.nxt_only and args.classic_vs_minimal:
+    parser.error("Select only one focused comparison")
+if (not args.nxt_only and (not args.classic or not args.classic_encrypt)) or (not args.nxt_only and not args.classic_vs_minimal and not args.nxt_crypt):
+    parser.error("Normal benchmark requires --classic, --classic-encrypt and --nxt-crypt")
 passphrase="local synthetic startup benchmark password 2026"
 
 def snapshot(pid):
@@ -64,14 +67,16 @@ def smaps_groups(pid, exe):
         match=SMAPS_HEADER.match(line)
         if match:
             path=match.group(1).strip().removesuffix(" (deleted)")
-            if path==exe: category="nxt_executable"
+            if path==exe: category="bot_executable"
             elif "libsodium.so" in path: category="libsodium"
             elif path=="[heap]": category="heap"
             elif path.startswith("[stack"): category="stack"
             elif path.startswith("[vdso") or path.startswith("[vvar") or path.startswith("[vsyscall"):
                 category="kernel_special"
             elif not path or path.startswith("[anon"): category="anonymous"
-            elif path.startswith("/"): category="other_files_and_libraries"
+            elif path.startswith("/"):
+                name=Path(path).name
+                category="library:"+name if name.startswith("lib") else "other_files"
             else: category="other"
             current=groups.setdefault(category,{k:0 for k in SMAPS_KEYS})
             continue
@@ -164,8 +169,8 @@ def one(label,roundno,profile):
             pss=int(statistics.median(x["pss"] for x in stable)) if all("pss" in x for x in stable) else None
             print("RAM_SAMPLE "+json.dumps(dict(label=label,profile=profile,round=roundno,rss_kib=rss,
                   hwm_kib=hwm,pss_kib=pss,real_irc_registration=True),sort_keys=True),flush=True)
-            maps=smaps_groups(process.pid,exe) if args.nxt_only else {}
-            if args.nxt_only:
+            maps=smaps_groups(process.pid,exe) if (args.nxt_only or args.classic_vs_minimal) else {}
+            if args.nxt_only or args.classic_vs_minimal:
                 print("MEMORY_MAP_SAMPLE "+json.dumps(dict(profile=profile,label=label,round=roundno,
                       categories=maps),sort_keys=True),flush=True)
             return dict(rss_kib=rss,hwm_kib=hwm,pss_kib=pss,mappings=maps)
@@ -187,6 +192,7 @@ def one(label,roundno,profile):
                 process.communicate(timeout=4)
 
 labels=(("nxt-plain","nxt-plain-with-crypto") if args.nxt_only else
+        ("classic-plain","nxt-plain") if args.classic_vs_minimal else
         ("classic-plain","nxt-plain","nxt-plain-with-crypto","classic-crypt","nxt-crypt"))
 profiles=("cfg-only","with-ul")
 groups={(profile,label):[] for profile in profiles for label in labels}
@@ -204,7 +210,8 @@ for (profile,label),rows in groups.items():
     print("RAM_MEDIAN "+json.dumps(dict(profile=profile,label=label,repeats=args.repeats,
           **medians[(profile,label)]),sort_keys=True),flush=True)
 for profile in profiles:
-    pairs=(("compile_toggle","nxt-plain","nxt-plain-with-crypto"),) if args.nxt_only else (
+    pairs=(("compile_toggle","nxt-plain","nxt-plain-with-crypto"),) if args.nxt_only else \
+          (("classic_vs_minimal","classic-plain","nxt-plain"),) if args.classic_vs_minimal else (
         ("plain","classic-plain","nxt-plain"),
         ("plain_crypto_enabled","classic-plain","nxt-plain-with-crypto"),
         ("crypt","classic-crypt","nxt-crypt"),
@@ -214,7 +221,7 @@ for profile in profiles:
         delta={key:right[key]-left[key] if left[key] is not None and right[key] is not None else None for key in right}
         print("RAM_COMPARE "+json.dumps(dict(profile=profile,mode=mode,classic=a,nxt=b,
               delta_nxt_minus_classic_kib=delta),sort_keys=True),flush=True)
-if args.nxt_only:
+if args.nxt_only or args.classic_vs_minimal:
     for profile in profiles:
         summaries={}
         for label in labels:
@@ -232,5 +239,5 @@ if args.nxt_only:
         delta={cat:{m:b.get(cat,{}).get(m,0)-a.get(cat,{}).get(m,0)
                     for m in SMAPS_KEYS} for cat in set(a)|set(b)}
         print("MEMORY_MAP_DELTA "+json.dumps(dict(profile=profile,
-              delta_crypto_enabled_minus_minimal=delta),sort_keys=True),flush=True)
+              delta_second_minus_first=delta),sort_keys=True),flush=True)
 print("LIVE_REAL_BOT_RAM_BENCH_OK",flush=True)
