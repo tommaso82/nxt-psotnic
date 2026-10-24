@@ -36,6 +36,8 @@ NXTCRYPT uses Argon2id and XChaCha20-Poly1305. Configuration saves and userlist 
 ./bin/psotnic userlist encrypt bot.ul --output bot.ul.nxt
 ```
 
+**Unattended startup.** Run `./bin/psotnic --key-cache bot.cfg.nxt` once and enter the password. The bot saves a private `bot.cfg.nxt.nxt-key` file containing randomized representations of the derived config and userlist keys, never the original password. Subsequent starts use `./bin/psotnic bot.cfg.nxt` without prompting; removing the cache restores password-based startup. Protect the cache like a decryption key. File-management `decrypt` and `preview` commands always require the password.
+
 Classic Psotnic's Blowfish-encrypted configurations and userlists can be imported using the original bot binary. For supported builds, nxt-psotnic extracts the encryption seed directly from the binary without executing it; the original seed file can also be supplied. The `config` and `userlist` commands support import, decryption and preview. See [encrypted storage](docs/NXT-CONFIG-CRYPTO.md) for usage, supported formats and password handling.
 
 ## Outbound proxy
