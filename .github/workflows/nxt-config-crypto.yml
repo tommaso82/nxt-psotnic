@@ -58,6 +58,18 @@ jobs:
           if ./bin/psotnic config encrypt missing --output out.nxt; then exit 1; fi
           ./bin/psotnic config import nonexistent --seed-file none --to nxt --output out.nxt > /tmp/unsupported.log 2>&1 && exit 1
           grep -q 'not compiled in' /tmp/unsupported.log
+      - name: Verify real legacy Blowfish import without libsodium
+        run: |
+          g++ -std=c++11 -O2 -I. class-blowfish.cpp tests/legacy-fixture.cpp -o /tmp/nxt-plain-legacy-fixture
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          /tmp/nxt-plain-legacy-fixture "$tmp/old.cfg"
+          printf '# legacy fixture\nnick legacybot\nsasl-password legacysecret\nrealname Legacy Fixture\n' > "$tmp/expected.cfg"
+          ./bin/psotnic config import "$tmp/old.cfg" --seed-file tests/fixtures/legacy-seed.h --output "$tmp/imported.cfg"
+          cmp "$tmp/expected.cfg" "$tmp/imported.cfg"
+          ./bin/psotnic config import "$tmp/old.cfg" --binary /tmp/nxt-plain-legacy-fixture --preview > "$tmp/preview.cfg"
+          cmp "$tmp/expected.cfg" "$tmp/preview.cfg"
+          test "$(stat -c %a "$tmp/imported.cfg")" = 600
   crypto:
     runs-on: ubuntu-24.04
     steps:
