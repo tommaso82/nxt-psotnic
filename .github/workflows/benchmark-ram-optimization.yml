@@ -8,7 +8,7 @@ on:
       - 'tests/benchmark-live-ram.py'
 jobs:
   measure:
-    name: Compare optimized live bots without touching production source
+    name: Compare equally optimized live bots without touching production source
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -26,7 +26,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          (cd classic && perl configure --disable-modules --disable-adns --cc-options=-DHAVE_DEBUG && make dynamic)
+          (cd classic && perl configure --disable-modules --disable-adns --cc-options='-DHAVE_DEBUG -Os' && make dynamic)
           g++ -std=c++11 -O2 -Iclassic classic/class-blowfish.cpp tests/bench-live-config.cpp -o /tmp/bench-original-encrypt
           mkdir ../nxt-base ../nxt-gc
           tar -cf - --exclude=.git --exclude=classic --exclude=bin . | (cd ../nxt-base && tar -xf -)
