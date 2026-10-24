@@ -1,0 +1,65 @@
+name: Experimental minimal NXT RAM optimization
+on:
+  workflow_dispatch:
+  push:
+    branches: ['test/ram-optimization']
+    paths:
+      - '.github/workflows/benchmark-ram-optimization.yml'
+      - 'tests/benchmark-live-ram.py'
+jobs:
+  measure:
+    name: Compare optimized live bots without touching production source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout original gay-psotnic
+        uses: actions/checkout@v4
+        with:
+          repository: psotnic/gay-psotnic
+          ref: 2bd6db1ecd84bc8f2ae90aae58de5ee3fe0263c2
+          path: classic
+          persist-credentials: false
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential perl libssl-dev
+      - name: Compile optimized release-like binaries with matching debug CLI capability
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd classic && perl configure --disable-modules --disable-adns --cc-options=-DHAVE_DEBUG && make dynamic)
+          g++ -std=c++11 -O2 -Iclassic classic/class-blowfish.cpp tests/bench-live-config.cpp -o /tmp/bench-original-encrypt
+          mkdir ../nxt-base ../nxt-gc
+          tar -cf - --exclude=.git --exclude=classic --exclude=bin . | (cd ../nxt-base && tar -xf -)
+          tar -cf - --exclude=.git --exclude=classic --exclude=bin . | (cd ../nxt-gc && tar -xf -)
+          (cd ../nxt-base && perl configure --disable-modules --disable-adns --cc-options=-DHAVE_DEBUG && make dynamic)
+          (cd ../nxt-gc && perl configure --disable-modules --disable-adns --cc-options='-DHAVE_DEBUG -ffunction-sections -fdata-sections' --ld-options='-Wl,--gc-sections' && make dynamic)
+      - name: Report ELF layout and dependencies
+        run: |
+          for item in classic ../nxt-base ../nxt-gc; do
+            echo "ELF_VARIANT $item"
+            ls -l "$item/bin/psotnic"
+            size "$item/bin/psotnic"
+            ldd "$item/bin/psotnic"
+          done
+          echo "TOP_NXT_BASE_OBJECT_SYMBOLS"
+          find ../nxt-base -maxdepth 1 -name '*.o' -print0 | xargs -0 nm -S --size-sort -C 2>/dev/null | tail -n 35
+          echo "TOP_NXT_GC_OBJECT_SYMBOLS"
+          find ../nxt-gc -maxdepth 1 -name '*.o' -print0 | xargs -0 nm -S --size-sort -C 2>/dev/null | tail -n 35
+      - name: Verify baseline and optimized NXT start in foreground
+        run: |
+          python3 tests/test-nxt-debug-foreground.py ../nxt-base/bin/psotnic
+          python3 tests/test-nxt-debug-foreground.py ../nxt-gc/bin/psotnic
+      - name: Measure original vs baseline NXT (-Os)
+        run: |
+          python3 tests/benchmark-live-ram.py --classic-vs-minimal \
+            --classic classic/bin/psotnic \
+            --nxt-min ../nxt-base/bin/psotnic \
+            --classic-encrypt /tmp/bench-original-encrypt \
+            --repeats 7
+      - name: Measure original vs optimized NXT (-Os + GC sections)
+        run: |
+          python3 tests/benchmark-live-ram.py --classic-vs-minimal \
+            --classic classic/bin/psotnic \
+            --nxt-min ../nxt-gc/bin/psotnic \
+            --classic-encrypt /tmp/bench-original-encrypt \
+            --repeats 7
