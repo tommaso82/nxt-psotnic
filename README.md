@@ -55,6 +55,6 @@ Set `proxy-scope irc,hub` to include outgoing hub connections. Incoming connecti
 
 ## Notes
 
-Keep configuration files, userlists, passwords and seed files out of Git. The historical `.bc update` command uses a separate plaintext HTTP updater and should not be used until reviewed.
+Keep configuration files, userlists, passwords and seed files out of Git. The legacy `.bc update` functionality is disabled.
 
 This project builds on the work credited in [AUTHORS](AUTHORS) and [AUTHORS-psotnic](AUTHORS-psotnic). The original license is retained in [COPYRIGHT.GPL](COPYRIGHT.GPL).
