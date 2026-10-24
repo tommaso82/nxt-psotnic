@@ -29,7 +29,7 @@ parser.add_argument("--repeats",type=int,default=5)
 args=parser.parse_args()
 binary={k:str(Path(v).resolve()) for k,v in {
     "classic":args.classic,"nxt_min":args.nxt_min,"nxt_crypt":args.nxt_crypt,
-    "classic_encrypt":args.classic_encrypt}.items()}
+    "classic_encrypt":args.classic_encrypt}.items() if v is not None}
 assert args.repeats>=3
 if not args.nxt_only and (not args.classic or not args.classic_encrypt):
     parser.error("--classic and --classic-encrypt are required without --nxt-only")
