@@ -1,16 +1,10 @@
 name: Live Userlist I/O benchmark
 on:
-  push:
-    branches: [feature/config-crypto-v1]
-    paths:
-      - class-userlist.cpp
-      - class-inet.cpp
-      - nxt-crypto.cpp
-      - tests/bench-userlist-driver.h
-      - tests/patch-benchmark.py
-      - .github/workflows/benchmark-userlist.yml
-      - tests/validate-benchmark-parity.py
   workflow_dispatch:
+  push:
+    branches: [devel]
+    paths:
+      - '.github/workflows/benchmark-userlist.yml'
 jobs:
   bench:
     name: Compare authentic gay-psotnic and NXT ul::save

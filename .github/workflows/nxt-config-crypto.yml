@@ -1,7 +1,7 @@
 name: NXT Config Crypto
 on:
   push:
-    branches: [feature/config-crypto-v1, devel]
+    branches: [devel]
   pull_request:
     paths:
       - 'nxt-crypto.*'
@@ -14,6 +14,8 @@ on:
       - 'tests/test-nxt-proxy-integration.py'
       - 'tests/test-nxt-debug-foreground.py'
       - 'tests/test-nxt-wizard.py'
+      - 'tests/userlist-bootstrap-test.cpp'
+      - 'tests/test-userlist-bootstrap-live.py'
       - 'config-create.cpp'
       - 'global-var.h'
       - 'class-userlist.cpp'
@@ -36,6 +38,7 @@ on:
       - 'tests/nxt-crypto-cli-test.cpp'
       - 'tests/cfg-session-test.cpp'
       - 'tests/test-nxt-cfg-session.sh'
+      - 'tests/key-cache-test.cpp'
       - '.github/workflows/nxt-config-crypto.yml'
 jobs:
   crypto:
@@ -49,6 +52,7 @@ jobs:
         run: |
           g++ -std=c++11 -O2 -Wall -Wextra -I. nxt-crypto.cpp nxt-legacy.cpp class-blowfish.cpp tests/nxt-crypto-cli-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-crypto-test
           g++ -std=c++11 -O2 -Wall -Wextra -I. nxt-crypto.cpp nxt-legacy.cpp class-blowfish.cpp tests/cfg-session-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-cfg-session-test
+          g++ -std=c++11 -O2 -Wall -Wextra -I. nxt-crypto.cpp nxt-legacy.cpp class-blowfish.cpp tests/userlist-bootstrap-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-ul-bootstrap-test
           for opt in 0 1 2; do
             g++ -std=c++11 -O"$opt" -I. class-blowfish.cpp tests/legacy-fixture.cpp -o "/tmp/old-psotnic-$opt"
           done
@@ -84,6 +88,35 @@ jobs:
           /tmp/nxt-key-cache-test cached "$dir/bot2.cfg.nxt" "$dir/pass" </dev/null
           rm "$dir/bot.key"
           if /tmp/nxt-key-cache-test cached "$dir/bot.cfg.nxt" "$dir/pass" </dev/null; then exit 1; fi
+      - name: First encrypted replica, unattended restart and first save
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$(mktemp -d)"
+          trap 'rm -rf "$root"' EXIT
+          mkdir -p "$root/fresh" "$root/manual" "$root/older" "$root/plain"
+          for dir in "$root/fresh" "$root/manual" "$root/older" "$root/plain"; do
+            printf 'nick testbot\n' > "$dir/config"
+            printf 'bootstrap-integration-pass\n' > "$dir/pass"
+            chmod 600 "$dir/pass"
+            /tmp/nxt-crypto-test config encrypt "$dir/config" --output "$dir/bot.cfg.nxt" --password-file "$dir/pass"
+          done
+          /tmp/nxt-ul-bootstrap-test create "$root/fresh/bot.cfg.nxt" "$root/fresh/bot.ul.nxt" "$root/fresh/pass" 0
+          test -s "$root/fresh/bot.key"
+          test ! -e "$root/fresh/bot.ul.nxt"
+          /tmp/nxt-ul-bootstrap-test cached "$root/fresh/bot.cfg.nxt" "$root/fresh/bot.ul.nxt" "$root/fresh/pass" 0 </dev/null
+          test ! -e "$root/fresh/bot.ul.nxt"
+          /tmp/nxt-ul-bootstrap-test cached "$root/fresh/bot.cfg.nxt" "$root/fresh/bot.ul.nxt" "$root/fresh/pass" 1000000 </dev/null
+          test "$(head -c 8 "$root/fresh/bot.ul.nxt")" = NXTCRYPT
+          /tmp/nxt-crypto-test userlist decrypt "$root/fresh/bot.ul.nxt" --output "$root/fresh/recovered" --password-file "$root/fresh/pass"
+          grep -q 'synthetic userlist' "$root/fresh/recovered"
+          /tmp/nxt-ul-bootstrap-test manual "$root/manual/bot.cfg.nxt" "$root/manual/bot.ul.nxt" "$root/manual/pass" 1024
+          test ! -e "$root/manual/bot.key"
+          /tmp/nxt-key-cache-test create "$root/older/bot.cfg.nxt" "$root/older/pass"
+          /tmp/nxt-ul-bootstrap-test create "$root/older/bot.cfg.nxt" "$root/older/bot.ul.nxt" "$root/older/pass" 0
+          /tmp/nxt-ul-bootstrap-test cached "$root/older/bot.cfg.nxt" "$root/older/bot.ul.nxt" "$root/older/pass" 256 </dev/null
+          /tmp/nxt-ul-bootstrap-test plain "$root/plain/bot.cfg.nxt" "$root/plain/bot.ul" "$root/plain/pass" 0
+          echo NXT_UL_BOOTSTRAP_OK
       - name: Legacy Blowfish decoding, seed.h, ELF binary extraction and direct NXT migration
         run: sh tests/test-nxt-legacy.sh /tmp/nxt-crypto-test /tmp/old-psotnic-0 /tmp/old-psotnic-1 /tmp/old-psotnic-2
   proxy-protocol:
@@ -210,6 +243,8 @@ jobs:
         run: python3 tests/test-nxt-debug-foreground.py ./bin/psotnic
       - name: Interactive -n/-ne encrypted and plaintext wizard end-to-end tests
         run: python3 tests/test-nxt-wizard.py ./bin/psotnic
+      - name: Real MAIN SLAVE LEAF encrypted-userlist bootstrap and idle RSS
+        run: python3 tests/test-userlist-bootstrap-live.py ./bin/psotnic
 
   real-classic-binary:
     name: Recover seed from real upstream gay-psotnic
