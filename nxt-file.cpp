@@ -19,8 +19,7 @@ bool is_legacy_file(const char *path) {
     char b[8];return (bool)f.read(b,8) && memcmp(b,"psotnic",7)==0 && b[7]=='\0';
 }
 void plaintext_guard(const char *path,const char *what) {
-    const size_t pathlen=strlen(path);
-    if(pathlen>=4 && memcmp(path+pathlen-4,".nxt",4)==0)
+    if(has_nxt_extension(path))
         throw std::runtime_error(std::string("refusing to write plaintext ")+what+
                                  " into .nxt; explicitly encrypt first");
     if(is_nxt_file(path) || is_legacy_file(path))

@@ -300,7 +300,7 @@ std::string legacy_decrypt(const char *file,const char *seed_file,const char *bi
 int import_common(int argc,char **argv,bool userlist) {
     if(argc<4) {fprintf(stderr,"Usage: psotnic config|userlist import OLD.cfg (--seed-file seed.h | --binary old-psotnic) [--preview | --output NEW.cfg --to plain|nxt]\n");return 1;}
     const char *seed_file=NULL, *binary=NULL, *output=NULL;
-    std::string mode="plain";bool preview=false,to_specified=false;
+    std::string mode="plain";bool preview=false,to_specified=false,password_option=false;
     try {
         for(int i=4;i<argc;++i) {
             if(!strcmp(argv[i],"--seed-file") && i+1<argc) seed_file=argv[++i];
@@ -310,9 +310,17 @@ int import_common(int argc,char **argv,bool userlist) {
             else if(!strcmp(argv[i],"--preview")) preview=true;
 #ifdef HAVE_NXTCRYPT
             else if(!strcmp(argv[i],"--password") && i+1<argc) {
-                ++i;nxtcrypto::set_password_argument(argv[i]);erase_bytes(argv[i],strlen(argv[i]));
-            } else if(!strcmp(argv[i],"--password-file") && i+1<argc) nxtcrypto::set_password_file(argv[++i]);
-            else if(!strcmp(argv[i],"--password-stdin")) nxtcrypto::set_password_stdin();
+                ++i;password_option=true;nxtcrypto::set_password_argument(argv[i]);erase_bytes(argv[i],strlen(argv[i]));
+            } else if(!strcmp(argv[i],"--password-file") && i+1<argc) {
+                password_option=true;nxtcrypto::set_password_file(argv[++i]);
+            } else if(!strcmp(argv[i],"--password-stdin")) {
+                password_option=true;nxtcrypto::set_password_stdin();
+            }
+#else
+            else if(!strcmp(argv[i],"--password") ||
+                    !strcmp(argv[i],"--password-file") ||
+                    !strcmp(argv[i],"--password-stdin"))
+                throw std::runtime_error("password options require NXTCRYPT (--enable-nxtcrypt)");
 #endif
             else throw std::runtime_error(std::string("unknown import option: ")+argv[i]);
         }
@@ -327,6 +335,10 @@ int import_common(int argc,char **argv,bool userlist) {
         if(!preview && mode=="plain" && nxt_extension)
             throw std::runtime_error(".nxt is reserved for encrypted files");
         if(!preview && mode=="nxt" && !nxt_extension) target+=".nxt";
+#ifdef HAVE_NXTCRYPT
+        if(password_option && mode!="nxt")
+            throw std::runtime_error("password options require encrypted output (--to nxt)");
+#endif
 #ifndef HAVE_NXTCRYPT
         if(mode=="nxt") throw std::runtime_error("NXTCRYPT support was not compiled in");
 #endif

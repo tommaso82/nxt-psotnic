@@ -23,8 +23,6 @@
 #include "nxt-file.h"
 #ifdef HAVE_NXTCRYPT
 #include "nxt-crypto.h"
-#endif
-#ifdef HAVE_NXTCRYPT
 #include <sodium.h>
 #endif
 #include <stdexcept>
@@ -1787,8 +1785,6 @@ bool ul::save(const char *file, const int cypher, const char *key)
     } catch(const std::exception& e) {
 #ifdef HAVE_NXTCRYPT
         if(!plain.empty()) sodium_memzero(&plain[0],plain.size());
-#endif
-#ifdef HAVE_NXTCRYPT
         if(encrypted) {
             plain.clear();
             plain.shrink_to_fit();
@@ -1855,8 +1851,7 @@ int ul::load(const char *file, const int cypher, const char *key)
             fprintf(stderr,"[-] NXTCRYPT support was not compiled in: %s\n",file);
             exit(1);
         }
-        const std::string name(file);
-        if(name.size()>=4 && name.substr(name.size()-4)==".nxt") {
+        if(nxtfile::has_nxt_extension(file)) {
             fprintf(stderr,"[-] Refusing malformed or missing NXT userlist %s\n",file);
             exit(1);
         }

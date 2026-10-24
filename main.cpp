@@ -19,6 +19,7 @@
  ***************************************************************************/
 
 #include "prots.h"
+#include "nxt-file.h"
 #ifdef HAVE_NXTCRYPT
 #include "nxt-crypto.h"
 #endif
@@ -139,6 +140,15 @@ int main(int argc, char *argv[])
 	nxtcrypto::begin_bootstrap();
 #endif
 	parse_cmdline(argc, argv);
+
+#ifndef HAVE_NXTCRYPT
+    if(config.save_userlist && nxtfile::has_nxt_extension((const char *)config.userlist_file)) {
+        fprintf(stderr,"[-] Cannot use encrypted userlist '%s': NXTCRYPT support was not compiled in. "
+                       "Rebuild with --enable-nxtcrypt or use a plaintext userlist.\n",
+                (const char *)config.userlist_file);
+        exit(1);
+    }
+#endif
 
 	userlist.addHandle("idiots", 0, 0, 0, 0, config.handle);
 	userlist.first->flags[MAX_CHANNELS] = HAS_D;

@@ -515,8 +515,7 @@ void session_save_encrypted(std::string& plaintext,const char *path,
 }
 // Prepare an encrypted replica without creating an empty userlist on disk.
 void prepare_missing_userlist(const char *path) {
-    const size_t len=strlen(path);
-    if(len<4 || strcmp(path+len-4,".nxt")!=0) return;
+    if(!has_nxt_extension(path)) return;
     if(ul_active) throw std::runtime_error("userlist session already active");
     ready();
     unsigned char header[HDR]={0};

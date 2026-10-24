@@ -179,6 +179,22 @@ if($enable_nxtcrypt) {
 
 chdir('..');
 
+# The original makefiles do not track changes in compiler flags.
+# Rebuild objects when NXTCRYPT is enabled or disabled between invocations.
+if(-f 'Makefile.dynamic') {
+    open(my $previous, '<', 'Makefile.dynamic') or die "[-] Cannot read Makefile.dynamic: $!\n";
+    local $/;
+    my $old = <$previous>;
+    close($previous);
+    my $was_crypto = $old =~ /-DHAVE_NXTCRYPT\b|-lsodium\b/ ? 1 : 0;
+    if($was_crypto != !!$enable_nxtcrypt) {
+        my @objects = glob('*.o');
+        my $removed = unlink @objects;
+        die "[-] Cannot remove stale build objects\n" if $removed != @objects;
+        print "[*] NXTCRYPT build mode changed; recompiling objects\n";
+    }
+}
+
 if($antiptrace)
 {
 	print "[+] Enabling antiptrace\n";

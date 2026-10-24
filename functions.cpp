@@ -24,8 +24,6 @@
 #include "nxt-legacy.h"
 #ifdef HAVE_NXTCRYPT
 #include "nxt-crypto.h"
-#endif
-#ifdef HAVE_NXTCRYPT
 #include <sodium.h>
 #endif
 #include <sstream>
@@ -405,11 +403,11 @@ static void print_nxt_action_help(const char *section, const char *action)
         printf("  --output FILE       Save imported %s\n", kind);
         puts("  --preview           Display without saving");
         puts("\nFormat:");
-        puts("  --to plain|nxt      Explicit output format");
 #ifdef HAVE_NXTCRYPT
+        puts("  --to plain|nxt      Explicit output format");
         puts("  Default: .nxt implies encryption; otherwise plain");
 #else
-        puts("  Default: plaintext (NXTCRYPT not compiled in)");
+        puts("  --to plain          Plaintext output (default)");
 #endif
         printf("\nExample:\n  psotnic %s import old.%s --binary oldbot --output bot.%s\n",
                section, suffix, suffix);
