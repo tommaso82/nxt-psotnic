@@ -19,7 +19,9 @@
  ***************************************************************************/
 
 #include "prots.h"
+#ifdef HAVE_NXTCRYPT
 #include "nxt-crypto.h"
+#endif
 #include "nxt-proxy.h"
 
 ptrlist<module> modules;
@@ -133,7 +135,9 @@ int main(int argc, char *argv[])
 	srand();
 
 	precache();
+#ifdef HAVE_NXTCRYPT
 	nxtcrypto::begin_bootstrap();
+#endif
 	parse_cmdline(argc, argv);
 
 	userlist.addHandle("idiots", 0, 0, 0, 0, config.handle);
@@ -161,11 +165,13 @@ int main(int argc, char *argv[])
 				printf("[*] Userlist not found (new slave?)\n");
             // Initialize the encrypted replica before discarding the bootstrap password.
             // Plaintext paths leave the original behavior and memory footprint intact.
+#ifdef HAVE_NXTCRYPT
             try { nxtcrypto::prepare_missing_userlist(config.userlist_file); }
             catch(const std::exception &e) {
                 fprintf(stderr,"[-] Cannot prepare encrypted userlist: %s\n",e.what());
                 exit(1);
             }
+#endif
 		}
 		else if(n == -1)
 		{
@@ -185,7 +191,9 @@ int main(int argc, char *argv[])
 		}
 	}
 
+#ifdef HAVE_NXTCRYPT
 	nxtcrypto::finish_bootstrap();
+#endif
 
     if(nxt_debug_mode) {
 #ifdef HAVE_DEBUG

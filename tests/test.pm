@@ -5,7 +5,7 @@ use strict;
 my ($lflags, $cflags);
 my %have;
 
-our ($antiptrace, $noircbacktrace, $ssl, $disable_ssl, $little_endian, $big_endian, $cc_prefix, $cc_options, $ld_options, $disable_adns, $firedns);
+our ($antiptrace, $noircbacktrace, $ssl, $disable_ssl, $little_endian, $big_endian, $cc_prefix, $cc_options, $ld_options, $disable_adns, $firedns, $enable_nxtcrypt);
 
 $lflags = "$ld_options ";
 $cflags = "$cc_options ";
@@ -192,10 +192,10 @@ sub getGccOptions
     # Match the other dependency probes: compile + link a small real test.
     # Checks for header, Argon2id and XChaCha20-Poly1305 symbols and adds
     # -lsodium to the linker flags only when needed. pkg-config is optional.
-    tryCompile("${cc_prefix}g++", 'sodium.c', '-lsodium');
-    if(!$have{'sodium.c'})
-    {
-        die "[-] libsodium development headers or library not found (or incompatible). Install libsodium-dev and retry.\n";
+    if($enable_nxtcrypt) {
+        tryCompile("${cc_prefix}g++", 'sodium.c', '-lsodium');
+        if(!$have{'sodium.c'})
+            die "[-] libsodium development headers or library not found (or incompatible). Install libsodium-dev and retry.\n";
     }
 	
 	return ($cflags, $lflags);
