@@ -9,15 +9,17 @@
 #include <cstdio>
 
 int main(int argc, char **argv) {
-    if(argc!=3) return 2;
+    if(argc!=3 && argc!=4) return 2;
+    const bool ul=argc==4 && strcmp(argv[3],"ul")==0;
+    if(argc==4 && !ul) return 2;
     std::ifstream in(argv[1],std::ios::binary);
     std::ofstream out(argv[2],std::ios::binary|std::ios::trunc);
     if(!in || !out) return 3;
     CBlowFish cipher;
-    cipher.Initialize(cfg_seed,16);
+    cipher.Initialize(ul?ul_seed:cfg_seed,16);
     psotnicHeader h={};
     strcpy(h.id,"psotnic");
-    h.version=3;
+    h.version=ul?(3U+STATUS_ULCRYPT):3U;
     out.write(reinterpret_cast<const char*>(&h),sizeof h);
     std::string line;
     while(std::getline(in,line)) {

@@ -48,11 +48,10 @@ def snapshot(pid):
             pass
     return result
 
-def one(label,roundno):
+def one(label,roundno,profile):
     with tempfile.TemporaryDirectory(prefix="nxt-live-ram-") as root:
         folder=Path(root)
         ul=folder/"bot.ul"
-        ul.write_text("# userlist\n21 42\n82 1700000000\n")
         pw=folder/"pw.txt"
         pw.write_text(passphrase+"\n")
         pw.chmod(0o600)
@@ -62,16 +61,29 @@ def one(label,roundno):
         server.listen(2)
         server.settimeout(8)
         port=server.getsockname()[1]
-        # Identical functional configuration for every bot under test.
+        # Same options and logical contents; only storage encoding differs.
         content=("nick ramtest\nident ramtest\nhandle ramtest\n"
                  "realname Bench Real Bot\ndontfork ON\n"
-                 "save-userlist ON\nuserlist bot.ul\n"
+                 "save-userlist %s\nuserlist bot.ul\n"
                  "hub 127.0.0.1 65531 hub-secret mainhub\n"
-                 "server 127.0.0.1 %d\n"%port)
+                 "server 127.0.0.1 %d\n"%("ON" if profile=="with-ul" else "OFF",port))
         plain=folder/"bot.cfg"
         plain.write_text(content)
         exe=binary["classic"] if label.startswith("classic") else binary[
             "nxt_min" if label=="nxt-plain" else "nxt_crypt"]
+        if profile=="with-ul":
+            ul.write_text("# userlist\n21 42\n82 1700000000\n")
+            if label.startswith("classic"):
+                legacy_ul=folder/"bot-legacy.ul"
+                subprocess.run([binary["classic_encrypt"],str(ul),str(legacy_ul),"ul"],
+                               check=True,capture_output=True,timeout=10)
+                legacy_ul.replace(ul)
+            elif label=="nxt-crypt":
+                encrypted_ul=folder/"bot.ul.nxt"
+                subprocess.run([exe,"userlist","encrypt",str(ul),"--output",str(encrypted_ul),
+                                "--password-file",str(pw)],
+                               check=True,capture_output=True,timeout=15)
+                encrypted_ul.replace(ul)
         if label=="classic-plain":
             cmd=[exe,"-d","-T","bot.cfg"]
         elif label=="classic-crypt":
@@ -117,14 +129,14 @@ def one(label,roundno):
             rss=int(statistics.median(x["vmrss"] for x in stable))
             hwm=max(x["vmhwm"] for x in readings)
             pss=int(statistics.median(x["pss"] for x in stable)) if all("pss" in x for x in stable) else None
-            print("RAM_SAMPLE "+json.dumps(dict(label=label,round=roundno,rss_kib=rss,
+            print("RAM_SAMPLE "+json.dumps(dict(label=label,profile=profile,round=roundno,rss_kib=rss,
                   hwm_kib=hwm,pss_kib=pss,real_irc_registration=True),sort_keys=True),flush=True)
             return dict(rss_kib=rss,hwm_kib=hwm,pss_kib=pss)
         except Exception as e:
             process.kill()
             output=process.communicate(timeout=5)[0].decode(errors="replace")
-            raise RuntimeError("%s round=%d failed: %s; BOT_OUTPUT=%s"%
-                               (label,roundno,e,output[-3000:])) from e
+            raise RuntimeError("%s profile=%s round=%d failed: %s; BOT_OUTPUT=%s"%
+                               (label,profile,roundno,e,output[-3000:])) from e
         finally:
             if conn:
                 conn.close()
@@ -137,24 +149,27 @@ def one(label,roundno):
                 process.kill()
                 process.communicate(timeout=4)
 
-groups={x:[] for x in ("classic-plain","nxt-plain","classic-crypt","nxt-crypt")}
-order=list(groups)
-for r in range(args.repeats):
-    for label in (order if r%2==0 else list(reversed(order))):
-        groups[label].append(one(label,r+1))
+labels=("classic-plain","nxt-plain","classic-crypt","nxt-crypt")
+profiles=("cfg-only","with-ul")
+groups={(profile,label):[] for profile in profiles for label in labels}
+for profile in profiles:
+    for r in range(args.repeats):
+        for label in (labels if r%2==0 else tuple(reversed(labels))):
+            groups[(profile,label)].append(one(label,r+1,profile))
 
 medians={}
-for label,rows in groups.items():
-    medians[label]={
+for (profile,label),rows in groups.items():
+    medians[(profile,label)]={
         key:int(statistics.median(x[key] for x in rows))
         if all(x[key] is not None for x in rows) else None
         for key in ("rss_kib","hwm_kib","pss_kib")}
-    print("RAM_MEDIAN "+json.dumps(dict(label=label,repeats=args.repeats,
-          **medians[label]),sort_keys=True),flush=True)
-for prefix,a,b in (("plain","classic-plain","nxt-plain"),
-                   ("crypt","classic-crypt","nxt-crypt")):
-    delta={key:medians[b][key]-medians[a][key] if medians[b][key] is not None and medians[a][key] is not None else None
-           for key in medians[b]}
-    print("RAM_COMPARE "+json.dumps(dict(mode=prefix,classic=a,nxt=b,
-          delta_nxt_minus_classic_kib=delta),sort_keys=True),flush=True)
+    print("RAM_MEDIAN "+json.dumps(dict(profile=profile,label=label,repeats=args.repeats,
+          **medians[(profile,label)]),sort_keys=True),flush=True)
+for profile in profiles:
+    for mode,a,b in (("plain","classic-plain","nxt-plain"),
+                     ("crypt","classic-crypt","nxt-crypt")):
+        left,right=medians[(profile,a)],medians[(profile,b)]
+        delta={key:right[key]-left[key] if left[key] is not None and right[key] is not None else None for key in right}
+        print("RAM_COMPARE "+json.dumps(dict(profile=profile,mode=mode,classic=a,nxt=b,
+              delta_nxt_minus_classic_kib=delta),sort_keys=True),flush=True)
 print("LIVE_REAL_BOT_RAM_BENCH_OK",flush=True)
