@@ -21,7 +21,7 @@
 #include <vector>
 
 namespace nxtcrypto {
-bool cached_key(const char*,const unsigned char*,bool,unsigned char*);
+bool cached_key(const char*,const unsigned char*,bool,unsigned char*,unsigned char* = NULL);
 void write_key_cache();
 namespace {
 const unsigned char MAGIC[8]={'N','X','T','C','R','Y','P','T'};
@@ -417,7 +417,7 @@ void cache_mask(unsigned char *mask,const unsigned char *seed,const unsigned cha
         throw std::runtime_error("cache scrambling failed");
     sodium_memzero(input,sizeof(input));
 }
-bool cached_key(const char *path,const unsigned char *header,bool userlist,unsigned char *key) {
+bool cached_key(const char *path,const unsigned char *header,bool userlist,unsigned char *key,unsigned char *saved_header) {
     if(!bootstrap) return false;
     ready();
     if(cache_path.empty()) {
@@ -453,8 +453,14 @@ bool cached_key(const char *path,const unsigned char *header,bool userlist,unsig
     const size_t off=25+(userlist?CACHE_RECORD:0);
     ok=ok && memcmp(state,CACHE_MAGIC,8)==0 &&
        (state[8]&~3U)==0 && (state[8]&bit)!=0 &&
-       memcmp(state+off,header,34)==0;
+       (header ? memcmp(state+off,header,34)==0 :
+                 userlist && memcmp(state+off,MAGIC,8)==0 &&
+                 state[off+8]==1 && state[off+9]==1 &&
+                 un32(state+off+10)>=1 && un32(state+off+10)<=8 &&
+                 un32(state+off+14)>=8U*1024U*1024U &&
+                 un32(state+off+14)<=256U*1024U*1024U);
     if(ok) {
+        if(saved_header) memcpy(saved_header,state+off,34);
         unsigned char mask[32];
         cache_mask(mask,state+9,state+off);
         for(size_t i=0;i<32;++i) key[i]=state[off+34+i]^mask[i];
@@ -525,6 +531,41 @@ void plaintext_guard(const char *path,const char *what) {
         throw std::runtime_error(std::string("refusing to overwrite an encrypted ")+what+
                                  " with plaintext");
 }
+// Prepare an encrypted replica without creating an empty userlist on disk.
+void prepare_missing_userlist(const char *path) {
+    const size_t len=strlen(path);
+    if(len<4 || strcmp(path+len-4,".nxt")!=0) return;
+    if(ul_active) throw std::runtime_error("userlist session already active");
+    ready();
+    unsigned char header[HDR]={0};
+    unsigned char key[crypto_aead_xchacha20poly1305_ietf_KEYBYTES]={0};
+    std::string pass;
+    try {
+        if(!cached_key(path,NULL,true,key,header)) {
+            memcpy(header,MAGIC,8);
+            header[8]=1;header[9]=1;
+            be32(header+10,OPS);be32(header+14,RAM);
+            randombytes_buf(header+18,crypto_pwhash_SALTBYTES);
+            pass=bootstrap_password.empty()?password(false):bootstrap_password;
+            if(crypto_pwhash(key,sizeof(key),pass.data(),pass.size(),header+18,
+                OPS,RAM,crypto_pwhash_ALG_ARGON2ID13)!=0)
+                throw std::runtime_error("Argon2id failed");
+        }
+        ul_header.assign(header,header+HDR);
+        ul_path=path;
+        memcpy(ul_key,key,sizeof(key));
+        ul_active=true;
+    } catch(...) {
+        wipe(pass);
+        sodium_memzero(key,sizeof(key));
+        sodium_memzero(header,sizeof(header));
+        throw;
+    }
+    wipe(pass);
+    sodium_memzero(key,sizeof(key));
+    sodium_memzero(header,sizeof(header));
+}
+
 void save_userlist_data(std::string& plaintext,const char *path) {
     // Plaintext saves do not need libsodium initialization.
     if(ul_active || wizard_active) ready();

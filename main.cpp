@@ -159,6 +159,13 @@ int main(int argc, char *argv[])
 			}
 			else if(config.bottype == BOT_SLAVE)
 				printf("[*] Userlist not found (new slave?)\n");
+            // Initialize the encrypted replica before discarding the bootstrap password.
+            // Plaintext paths leave the original behavior and memory footprint intact.
+            try { nxtcrypto::prepare_missing_userlist(config.userlist_file); }
+            catch(const std::exception &e) {
+                fprintf(stderr,"[-] Cannot prepare encrypted userlist: %s\n",e.what());
+                exit(1);
+            }
 		}
 		else if(n == -1)
 		{
