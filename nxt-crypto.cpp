@@ -420,7 +420,18 @@ void cache_mask(unsigned char *mask,const unsigned char *seed,const unsigned cha
 bool cached_key(const char *path,const unsigned char *header,bool userlist,unsigned char *key) {
     if(!bootstrap) return false;
     ready();
-    if(cache_path.empty()) cache_path=std::string(path)+".nxt-key";
+    if(cache_path.empty()) {
+        cache_path=path;
+        for(const char *suffix : {".cfg.nxt",".ul.nxt",".nxt"}) {
+            const size_t len=strlen(suffix);
+            if(cache_path.size()>=len &&
+               cache_path.compare(cache_path.size()-len,len,suffix)==0) {
+                cache_path.resize(cache_path.size()-len);
+                break;
+            }
+        }
+        cache_path+=".key";
+    }
     int fd=open(cache_path.c_str(),O_RDONLY|O_CLOEXEC|O_NOFOLLOW|O_NONBLOCK);
     if(fd<0) return false;
     struct stat st;
