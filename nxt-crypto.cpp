@@ -3,7 +3,6 @@
 //         salt[16], nonce[24], ciphertext + authentication tag.
 // The whole 58-byte header is authenticated as additional data.
 #include "nxt-crypto.h"
-#include "nxt-legacy.h"
 #include <sodium.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -581,8 +580,6 @@ void save_config_data(std::string& plaintext,const char *path) {
     }
 }
 int userlist_command(int argc,char **argv) {
-    if(argc>2 && !strcmp(argv[2],"import"))
-        return nxtlegacy::import_userlist_command(argc,argv);
     return config_command(argc,argv);
 }
 
@@ -599,8 +596,6 @@ void encrypt_plaintext_to_file(const std::string& content, const char *path) {
     } catch(...) {wipe(pass);throw;}
 }
 int config_command(int argc,char **argv) {
-    if(argc>2 && !strcmp(argv[2],"import"))
-        return nxtlegacy::import_command(argc,argv);
     if(argc<4) {usage();return 1;}
     std::string action=argv[2];
     const char *input=argv[3], *output=NULL;

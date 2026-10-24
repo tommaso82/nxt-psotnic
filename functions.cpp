@@ -20,8 +20,14 @@
 
 #include "prots.h"
 #include "global-var.h"
+#include "nxt-file.h"
+#include "nxt-legacy.h"
+#ifdef HAVE_NXTCRYPT
 #include "nxt-crypto.h"
+#endif
+#ifdef HAVE_NXTCRYPT
 #include <sodium.h>
+#endif
 #include <sstream>
 #include <unistd.h>  // isatty(STDOUT_FILENO)
 
@@ -355,8 +361,13 @@ static void print_nxt_short_help()
     puts("  -h, --help      Show help");
     puts("  -v, --version   Show version");
     puts("\nFile tools:");
+#ifdef HAVE_NXTCRYPT
     puts("  config          Encrypt, decrypt, import");
     puts("  userlist        Encrypt, decrypt, import");
+#else
+    puts("  config          Import legacy config");
+    puts("  userlist        Import legacy userlist");
+#endif
     puts("\nSupports legacy gay-psotnic files.");
     puts("Run 'psotnic --help' for details.");
 }
@@ -367,10 +378,14 @@ static void print_nxt_config_help(bool userlist)
     printf("%s management\n\n", userlist ? "Userlist" : "Configuration");
     printf("Usage: psotnic %s <command>\n\n", section);
     puts("Commands:");
+#ifdef HAVE_NXTCRYPT
     printf("  encrypt     Encrypt a %s\n", userlist ? "userlist" : "configuration");
     printf("  decrypt     Decrypt a %s\n", userlist ? "userlist" : "configuration");
+#endif
     puts("  import      Import from gay-psotnic");
+#ifdef HAVE_NXTCRYPT
     puts("  preview     Display decrypted contents");
+#endif
     printf("\nUse 'psotnic %s <command>' for details.\n", section);
 }
 
@@ -391,14 +406,24 @@ static void print_nxt_action_help(const char *section, const char *action)
         puts("  --preview           Display without saving");
         puts("\nFormat:");
         puts("  --to plain|nxt      Explicit output format");
+#ifdef HAVE_NXTCRYPT
         puts("  Default: .nxt implies encryption; otherwise plain");
+#else
+        puts("  Default: plaintext (NXTCRYPT not compiled in)");
+#endif
         printf("\nExample:\n  psotnic %s import old.%s --binary oldbot --output bot.%s\n",
                section, suffix, suffix);
+#ifdef HAVE_NXTCRYPT
         puts("\nEncrypted output prompts for a new password.");
         puts("Encrypted output automatically uses the .nxt extension.");
+#endif
         return;
     }
 
+#ifndef HAVE_NXTCRYPT
+    puts("NXTCRYPT support was not compiled in.");
+    return;
+#else
     const bool encrypt = !strcmp(action, "encrypt");
     const bool preview = !strcmp(action, "preview");
     if(encrypt)
@@ -433,6 +458,7 @@ static void print_nxt_action_help(const char *section, const char *action)
         puts("\nWarning: sensitive data is printed to stdout.");
     else
         puts("\nThe .nxt extension is reserved for encrypted files.");
+#endif
 }
 
 static void print_nxt_help()
@@ -451,11 +477,13 @@ static void print_nxt_help()
     puts("\nFile tools:");
     puts("  config                 Manage configuration files");
     puts("  userlist               Manage userlist files");
+#ifdef HAVE_NXTCRYPT
     puts("\nEncrypted startup:");
     puts("  --key-cache            Cache keys for future starts");
     puts("  --password-file FILE   Read password from file");
     puts("  --password-stdin       Read password from stdin");
     puts("  --password TEXT        Password argument (unsafe)");
+#endif
     puts("\nOther options:");
     puts("  -h, --help             Show help");
     puts("  -v, --version          Show version");
@@ -506,14 +534,32 @@ void parse_cmdline(int argc, char *argv[])
     }
 	if(argc > 1 && !strcmp(argv[1], "config"))
 	{
+#ifdef HAVE_NXTCRYPT
         nxtcrypto::finish_bootstrap();
-		int status = nxtcrypto::config_command(argc, argv);
+#endif
+        int status;
+        if(argc>2 && !strcmp(argv[2],"import"))
+            status=nxtlegacy::import_command(argc,argv);
+#ifdef HAVE_NXTCRYPT
+        else status=nxtcrypto::config_command(argc,argv);
+#else
+        else { fprintf(stderr,"NXTCRYPT support was not compiled in\n"); status=1; }
+#endif
 		::exit(status);
 	}
 	if(argc > 1 && !strcmp(argv[1], "userlist"))
 	{
+#ifdef HAVE_NXTCRYPT
         nxtcrypto::finish_bootstrap();
-		int status = nxtcrypto::userlist_command(argc, argv);
+#endif
+        int status;
+        if(argc>2 && !strcmp(argv[2],"import"))
+            status=nxtlegacy::import_userlist_command(argc,argv);
+#ifdef HAVE_NXTCRYPT
+        else status=nxtcrypto::userlist_command(argc,argv);
+#else
+        else { fprintf(stderr,"NXTCRYPT support was not compiled in\n"); status=1; }
+#endif
 		::exit(status);
 	}
 	int i;
@@ -578,6 +624,7 @@ void parse_cmdline(int argc, char *argv[])
 			exit(0);
 		}
 
+#ifdef HAVE_NXTCRYPT
 		else if(!strcmp(argv[i], "--password") && i+1 < argc)
 		{
 			++i;
@@ -590,6 +637,7 @@ void parse_cmdline(int argc, char *argv[])
 			nxtcrypto::set_password_stdin();
         else if(!strcmp(argv[i], "--key-cache"))
             nxtcrypto::enable_key_cache();
+#endif
 		else if(!strcmp(argv[i], "-n") || !strcmp(argv[i], "--new"))
 			createInitialConfig();
 
