@@ -204,7 +204,7 @@ jobs:
                               "nick nxtbot\nident nxtbot\nhandle nxtbot\n"
                               "hub 127.0.0.1 1 testingpass mainhub\n"
                               f"server 127.0.0.1 {port}\n"
-                              "userlist bot.ul\ndontfork ON\n")
+                              "userlist bot.ul\nsave-userlist ON\ndontfork ON\n")
                           p=subprocess.Popen([executables[flavor],"bot.cfg"],
                               cwd=d,stdin=subprocess.DEVNULL,
                               stdout=subprocess.DEVNULL,stderr=subprocess.PIPE)
