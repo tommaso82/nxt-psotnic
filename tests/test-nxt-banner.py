@@ -71,8 +71,10 @@ assert not b"gay-psotnic, version" in plain
 quick = run_plain()
 quick_lines = quick.decode("ascii").splitlines()
 assert quick_lines[:3] == ["", lines[1], ""], "No-args needs the same title with blank lines"
-assert "Quick start:" in quick_lines, "The no-args screen must remain a short guide"
-assert len(quick_lines) <= 12, "The no-args screen must stay compact"
+assert "File tools:" in quick_lines, "Quick help must expose file tools"
+assert "Supports legacy gay-psotnic files." in quick_lines
+assert "Foreground (debug tracing if compiled)" in quick.decode("ascii")
+assert len(quick_lines) <= 18, "The no-args screen must stay compact"
 assert not ansi.search(quick), "Redirected quick help must not contain ANSI codes"
 
 colored = run_tty()

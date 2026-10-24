@@ -289,13 +289,13 @@ std::string legacy_decrypt(const char *file,const char *seed_file,const char *bi
 int import_common(int argc,char **argv,bool userlist) {
     if(argc<4) {fprintf(stderr,"Usage: psotnic config|userlist import OLD.cfg (--seed-file seed.h | --binary old-psotnic) [--preview | --output NEW.cfg --to plain|nxt]\n");return 1;}
     const char *seed_file=NULL, *binary=NULL, *output=NULL;
-    std::string mode="plain";bool preview=false;
+    std::string mode="plain";bool preview=false,to_specified=false;
     try {
         for(int i=4;i<argc;++i) {
             if(!strcmp(argv[i],"--seed-file") && i+1<argc) seed_file=argv[++i];
             else if(!strcmp(argv[i],"--binary") && i+1<argc) binary=argv[++i];
             else if(!strcmp(argv[i],"--output") && i+1<argc) output=argv[++i];
-            else if(!strcmp(argv[i],"--to") && i+1<argc) mode=argv[++i];
+            else if(!strcmp(argv[i],"--to") && i+1<argc) {mode=argv[++i];to_specified=true;}
             else if(!strcmp(argv[i],"--preview")) preview=true;
             else if(!strcmp(argv[i],"--password") && i+1<argc) {
                 ++i;nxtcrypto::set_password_argument(argv[i]);sodium_memzero(argv[i],strlen(argv[i]));
@@ -304,20 +304,27 @@ int import_common(int argc,char **argv,bool userlist) {
             else throw std::runtime_error(std::string("unknown import option: ")+argv[i]);
         }
         if(mode!="plain" && mode!="nxt") throw std::runtime_error("--to must be plain or nxt");
-        if(preview && output) throw std::runtime_error("preview cannot write an output file");
+        if(preview && output) throw std::runtime_error("--preview cannot be combined with --output");
+        if(preview && to_specified) throw std::runtime_error("--to cannot be used with --preview");
         if(!preview && !output) throw std::runtime_error("--output is required unless --preview");
         if(!seed_file && !binary) throw std::runtime_error("missing --seed-file or --binary");
+        std::string target=output ? output : "";
+        const bool nxt_extension=nxtcrypto::has_nxt_extension(target.c_str());
+        if(!preview && !to_specified && nxt_extension) mode="nxt";
+        if(!preview && mode=="plain" && nxt_extension)
+            throw std::runtime_error(".nxt is reserved for encrypted files");
+        if(!preview && mode=="nxt" && !nxt_extension) target+=".nxt";
         std::string plain=legacy_decrypt_as(argv[3],seed_file,binary,userlist);
         try {
             if(preview) {
                 if(fwrite(plain.data(),1,plain.size(),stdout)!=plain.size())
                     throw std::runtime_error("failed to write preview");
             } else if(mode=="plain") {
-                save_plain(output,plain);
-                printf("[+] Legacy config imported as plaintext: %s\n",output);
+                save_plain(target.c_str(),plain);
+                printf("[+] Legacy %s imported as plaintext: %s\n",userlist?"userlist":"config",target.c_str());
             } else {
-                nxtcrypto::encrypt_plaintext_to_file(plain,output);
-                printf("[+] Legacy config imported directly to NXTCRYPT: %s\n",output);
+                nxtcrypto::encrypt_plaintext_to_file(plain,target.c_str());
+                printf("[+] Legacy %s imported to NXTCRYPT: %s\n",userlist?"userlist":"config",target.c_str());
             }
             erase(plain);
         } catch(...) {erase(plain);throw;}

@@ -70,9 +70,9 @@ class Terminal:
 def create(mode, encrypted, base):
     with tempfile.TemporaryDirectory(prefix=f"nxt-wizard-{mode}-") as folder:
         tmp = Path(folder)
-        t = Terminal(folder, [mode])
+        t = Terminal(folder, mode.split())
         try:
-            if mode == "-n":
+            if mode in ("-n", "--new"):
                 t.respond("Encrypt config and userlist with NXTCRYPT?", "y" if encrypted else "")
                 t.respond("nick?", NICK)
                 t.respond("username?", NICK)
@@ -146,6 +146,6 @@ def create(mode, encrypted, base):
             assert "ownerwiz" in ul.read_text()
         print(f"NXT_WIZARD_OK mode={mode} encrypted={encrypted} files=2 same_pass=yes" ,flush=True)
 
-for mode in ("-n", "-ne"):
+for mode in ("-n", "-ne", "--new", "--new --expert"):
     for encrypted in (False, True):
         create(mode, encrypted, None)

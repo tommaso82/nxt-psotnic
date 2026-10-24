@@ -13,6 +13,7 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
+#include <strings.h>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -21,6 +22,10 @@
 #include <vector>
 
 namespace nxtcrypto {
+bool has_nxt_extension(const char *path) {
+    const size_t size = strlen(path);
+    return size >= 4 && !strcasecmp(path + size - 4, ".nxt");
+}
 bool cached_key(const char*,const unsigned char*,bool,unsigned char*,unsigned char* = NULL);
 void write_key_cache();
 namespace {
@@ -637,15 +642,19 @@ int config_command(int argc,char **argv) {
                 throw std::runtime_error("input is already encrypted");
             std::vector<unsigned char> clear=load_bytes(input);
             if(clear.empty()) throw std::runtime_error("cannot encrypt empty config");
+            std::string target(output);
+            if(!has_nxt_extension(target.c_str())) target+=".nxt";
             std::string pass=password(true);
             try {
                 std::vector<unsigned char> cipher=seal(clear,pass);
                 wipe(pass);wipe(clear);
-                save_new(output,cipher.data(),cipher.size());wipe(cipher);
+                save_new(target.c_str(),cipher.data(),cipher.size());wipe(cipher);
             } catch(...) {wipe(pass);wipe(clear);throw;}
-            printf("[+] Encrypted config saved: %s\n",output);
+            printf("[+] Encrypted %s saved: %s\n",strcmp(argv[1],"userlist")?"config":"userlist",target.c_str());
         } else if(action=="decrypt" || action=="preview") {
             if(action=="decrypt" && !output) throw std::runtime_error("decrypt requires --output");
+            if(action=="decrypt" && has_nxt_extension(output))
+                throw std::runtime_error(".nxt is reserved for encrypted files");
             if(action=="preview" && output) throw std::runtime_error("preview cannot use --output");
             std::string clear=decrypt_file(input);
             try {

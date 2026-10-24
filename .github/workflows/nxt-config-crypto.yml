@@ -193,9 +193,9 @@ jobs:
           cmp /tmp/nxt-help.txt /tmp/nxt-help-alias.txt
           test -z "$(head -n 1 /tmp/nxt-quick.txt)"
           test "$(sed -n '2p' /tmp/nxt-quick.txt)" = ':: nxt-psotnic :: 0.1.0-dev'
-          grep -q 'Quick start:' /tmp/nxt-quick.txt
-          grep -q 'Full guide' /tmp/nxt-quick.txt
-          if [ "$(wc -l < /tmp/nxt-quick.txt)" -gt 12 ]; then
+          grep -q 'File tools:' /tmp/nxt-quick.txt
+          grep -q 'Supports legacy gay-psotnic files.' /tmp/nxt-quick.txt
+          if [ "$(wc -l < /tmp/nxt-quick.txt)" -gt 18 ]; then
             echo 'Bare invocation is not concise'; exit 1
           fi
           if grep -q 'proxy-type' /tmp/nxt-quick.txt; then
@@ -204,22 +204,30 @@ jobs:
           if cmp -s /tmp/nxt-quick.txt /tmp/nxt-help.txt; then
             echo 'Short help and full help are identical'; exit 1
           fi
-          grep -q 'proxy-scope irc|irc,hub' /tmp/nxt-help.txt
+          grep -q -- '--key-cache' /tmp/nxt-help.txt
+          grep -q -- '--foreground' /tmp/nxt-help.txt
           grep -q 'config --help' /tmp/nxt-help.txt
           ./bin/psotnic config --help > /tmp/nxt-config-help.txt
           ./bin/psotnic config > /tmp/nxt-config-bare.txt
           ./bin/psotnic help config > /tmp/nxt-config-alias.txt
           cmp /tmp/nxt-config-help.txt /tmp/nxt-config-bare.txt
           cmp /tmp/nxt-config-help.txt /tmp/nxt-config-alias.txt
-          grep -q 'config encrypt INPUT' /tmp/nxt-config-help.txt
-          grep -q 'config import OLD_FILE' /tmp/nxt-config-help.txt
+          grep -q 'config <command>' /tmp/nxt-config-help.txt
+          ./bin/psotnic config import > /tmp/nxt-import-help.txt
+          ./bin/psotnic config import --help > /tmp/nxt-import-flag-help.txt
+          cmp /tmp/nxt-import-help.txt /tmp/nxt-import-flag-help.txt
+          grep -q 'Encrypted output prompts for a new password.' /tmp/nxt-import-help.txt
+          ./bin/psotnic config encrypt > /tmp/nxt-encrypt-help.txt
+          grep -q 'Destination (.nxt added if missing)' /tmp/nxt-encrypt-help.txt
           ./bin/psotnic userlist --help > /tmp/nxt-ul-help.txt
           ./bin/psotnic userlist > /tmp/nxt-ul-bare.txt
           ./bin/psotnic help userlist > /tmp/nxt-ul-alias.txt
           cmp /tmp/nxt-ul-help.txt /tmp/nxt-ul-bare.txt
           cmp /tmp/nxt-ul-help.txt /tmp/nxt-ul-alias.txt
-          grep -q 'userlist import OLD_FILE' /tmp/nxt-ul-help.txt
-          grep -q 'userlist encrypt INPUT' /tmp/nxt-ul-help.txt
+          grep -q 'userlist <command>' /tmp/nxt-ul-help.txt
+          ./bin/psotnic userlist import > /tmp/nxt-ul-import-help.txt
+          ./bin/psotnic userlist import --help > /tmp/nxt-ul-import-flag-help.txt
+          cmp /tmp/nxt-ul-import-help.txt /tmp/nxt-ul-import-flag-help.txt
           if cmp -s /tmp/nxt-config-help.txt /tmp/nxt-ul-help.txt; then
             echo 'Contextual help must not be identical'; exit 1
           fi
