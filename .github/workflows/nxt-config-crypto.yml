@@ -76,6 +76,12 @@ jobs:
           /usr/bin/time -f "CACHE_PEAK_RSS_KB=%M" /tmp/nxt-key-cache-test cached "$dir/bot.cfg.nxt" "$dir/pass" </dev/null
           if /tmp/nxt-crypto-test config decrypt "$dir/bot.cfg.nxt" --output "$dir/forbidden" </dev/null; then exit 1; fi
           test ! -e "$dir/forbidden"
+          # Independent cache files allow multiple bots in the same directory.
+          /tmp/nxt-crypto-test config encrypt "$dir/plain" --output "$dir/bot2.cfg.nxt" --password-file "$dir/pass"
+          /tmp/nxt-key-cache-test create "$dir/bot2.cfg.nxt" "$dir/pass"
+          test -s "$dir/bot2.key"
+          /tmp/nxt-key-cache-test cached "$dir/bot.cfg.nxt" "$dir/pass" </dev/null
+          /tmp/nxt-key-cache-test cached "$dir/bot2.cfg.nxt" "$dir/pass" </dev/null
           rm "$dir/bot.key"
           if /tmp/nxt-key-cache-test cached "$dir/bot.cfg.nxt" "$dir/pass" </dev/null; then exit 1; fi
       - name: Legacy Blowfish decoding, seed.h, ELF binary extraction and direct NXT migration
