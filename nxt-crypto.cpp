@@ -22,10 +22,6 @@
 #include <vector>
 
 namespace nxtcrypto {
-bool has_nxt_extension(const char *path) {
-    const size_t size = strlen(path);
-    return size >= 4 && !strcasecmp(path + size - 4, ".nxt");
-}
 bool cached_key(const char*,const unsigned char*,bool,unsigned char*,unsigned char* = NULL);
 void write_key_cache();
 namespace {
@@ -231,14 +227,6 @@ void usage() {
 }
 } // namespace
 
-bool is_nxt_file(const char *path) {
-    std::ifstream f(path,std::ios::binary);
-    char b[8];return (bool)f.read(b,8) && memcmp(b,MAGIC,8)==0;
-}
-bool is_legacy_file(const char *path) {
-    std::ifstream f(path,std::ios::binary);
-    char b[8];return (bool)f.read(b,8) && memcmp(b,"psotnic",7)==0 && b[7]=='\0';
-}
 void set_password_argument(const char *arg) {
     ready();wipe(password_arg);password_arg=arg;has_password_arg=true;
     password_path.clear();stdin_password=false;
@@ -525,16 +513,6 @@ void session_save_encrypted(std::string& plaintext,const char *path,
     }
     sodium_memzero(mac,sizeof(mac));
     sodium_memzero(header,sizeof(header));
-}
-// A plaintext session must never silently downgrade an encrypted file.
-void plaintext_guard(const char *path,const char *what) {
-    const size_t pathlen=strlen(path);
-    if(pathlen>=4 && memcmp(path+pathlen-4,".nxt",4)==0)
-        throw std::runtime_error(std::string("refusing to write plaintext ")+what+
-                                 " into .nxt; explicitly encrypt first");
-    if(is_nxt_file(path) || is_legacy_file(path))
-        throw std::runtime_error(std::string("refusing to overwrite an encrypted ")+what+
-                                 " with plaintext");
 }
 // Prepare an encrypted replica without creating an empty userlist on disk.
 void prepare_missing_userlist(const char *path) {
