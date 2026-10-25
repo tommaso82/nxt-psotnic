@@ -2,9 +2,21 @@ name: Live Userlist I/O benchmark
 on:
   workflow_dispatch:
   push:
-    branches: [devel]
+    branches: [devel, 'test/optional-nxtcrypt']
     paths:
       - '.github/workflows/benchmark-userlist.yml'
+      - 'class-userlist.cpp'
+      - 'class-inet.cpp'
+      - 'class-options.cpp'
+      - 'main.cpp'
+      - 'nxt-crypto.*'
+      - 'nxt-file.*'
+      - 'nxt-legacy.*'
+      - 'configure'
+      - 'tests/test.pm'
+      - 'tests/bench-userlist-driver.h'
+      - 'tests/patch-benchmark.py'
+      - 'tests/validate-benchmark-parity.py'
 jobs:
   bench:
     name: Compare authentic gay-psotnic and NXT ul::save
@@ -38,7 +50,7 @@ jobs:
         run: |
           (cd classic && perl configure --disable-modules && make dynamic)
           (cd baseline && perl configure --disable-modules && make dynamic)
-          perl configure --disable-modules
+          perl configure --enable-nxtcrypt --disable-modules
           make dynamic
       # Keep this workflow runnable for each optimization commit and collect
       # a same-runner before/after comparison against original gay-psotnic.

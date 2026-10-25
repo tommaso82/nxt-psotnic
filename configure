@@ -4,7 +4,7 @@ use strict;
 use FileHandle;
 use Getopt::Long;
 
-our ($antiptrace, $noircbacktrace, $ssl, $disable_ssl, $disable_modules, $little_endian, $big_endian, $cc_prefix, $cc_options, $ld_options, $disable_adns, $firedns, $prefix, $bindir, $includesdir, $modulesdir, $confdir, $help);
+our ($antiptrace, $noircbacktrace, $ssl, $disable_ssl, $disable_modules, $enable_nxtcrypt, $little_endian, $big_endian, $cc_prefix, $cc_options, $ld_options, $disable_adns, $firedns, $prefix, $bindir, $includesdir, $modulesdir, $confdir, $help);
 
 if(!GetOptions(
 	"--with-antiptrace" => \$antiptrace,
@@ -19,6 +19,7 @@ if(!GetOptions(
 	"--disable-ssl" => \$disable_ssl,
 	"--with-firedns" => \$firedns,
 	"--disable-modules" => \$disable_modules,
+	"--enable-nxtcrypt" => \$enable_nxtcrypt,
 	"--prefix:s" => \$prefix,
 	"--help" => \$help))
 {
@@ -41,6 +42,7 @@ if($help)
 	print "  --disable-ssl     \tDisable SSL support\n";
 	print "  --with-firedns    \tEnable the FireDNS resolver\n";
 	print "  --disable-modules \tDisable module support\n";
+	print "  --enable-nxtcrypt \tEnable NXTCRYPT storage (libsodium)\n";
 	print "  --prefix          \tPrefix for the installation and search paths            [".$ENV{'HOME'} . "/gay-psotnic]\n";
 	exit;
 }
@@ -51,7 +53,7 @@ $targets{'dynamic'} = '-Os -Wall -Wno-non-virtual-dtor';
 $targets{'debug'} = '-DHAVE_DEBUG -g -fno-inline -pedantic -Wall -Wno-long-long -Wformat=2 -Wunused -Wno-non-virtual-dtor';
 
 my $filelist = "
-nxt-crypto.o
+nxt-file.o
 nxt-legacy.o
 nxt-proxy.o
 class-adns.o
@@ -108,6 +110,7 @@ signals.o
 scram.o";
 
 my $headerlist = "
+nxt-file.h
 nxt-crypto.h
 nxt-legacy.h
 nxt-proxy.h
@@ -166,8 +169,31 @@ my $os = `uname`;
 $os =~ s/\n//;
 print "[*] Operating system: $os\n";
 my ($cflags, $lflags) = getGccOptions();
+if($enable_nxtcrypt) {
+    $cflags .= "-DHAVE_NXTCRYPT ";
+    $filelist .= "\nnxt-crypto.o";
+    print "[+] NXTCRYPT enabled\n";
+} else {
+    print "[-] NXTCRYPT disabled (use --enable-nxtcrypt to enable)\n";
+}
 
 chdir('..');
+
+# The original makefiles do not track changes in compiler flags.
+# Rebuild objects when NXTCRYPT is enabled or disabled between invocations.
+if(-f 'Makefile.dynamic') {
+    open(my $previous, '<', 'Makefile.dynamic') or die "[-] Cannot read Makefile.dynamic: $!\n";
+    local $/;
+    my $old = <$previous>;
+    close($previous);
+    my $was_crypto = $old =~ /-DHAVE_NXTCRYPT\b|-lsodium\b/ ? 1 : 0;
+    if($was_crypto != !!$enable_nxtcrypt) {
+        my @objects = glob('*.o');
+        my $removed = unlink @objects;
+        die "[-] Cannot remove stale build objects\n" if $removed != @objects;
+        print "[*] NXTCRYPT build mode changed; recompiling objects\n";
+    }
+}
 
 if($antiptrace)
 {

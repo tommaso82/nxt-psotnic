@@ -3,7 +3,6 @@
 //         salt[16], nonce[24], ciphertext + authentication tag.
 // The whole 58-byte header is authenticated as additional data.
 #include "nxt-crypto.h"
-#include "nxt-legacy.h"
 #include <sodium.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -22,10 +21,6 @@
 #include <vector>
 
 namespace nxtcrypto {
-bool has_nxt_extension(const char *path) {
-    const size_t size = strlen(path);
-    return size >= 4 && !strcasecmp(path + size - 4, ".nxt");
-}
 bool cached_key(const char*,const unsigned char*,bool,unsigned char*,unsigned char* = NULL);
 void write_key_cache();
 namespace {
@@ -225,20 +220,12 @@ void usage() {
         "  psotnic config encrypt INPUT --output OUTPUT [password option]\n"
         "  psotnic config decrypt INPUT --output OUTPUT [password option]\n"
         "  psotnic config preview INPUT [password option]\n"
-        "  psotnic config import OLD.cfg --seed-file seed.h --output bot.cfg [--to plain|nxt]\n"
-        "  psotnic config import OLD.cfg --binary ./old-psotnic --preview\n"
+        "Encrypted output automatically adds .nxt when missing.\n"
+        "Plaintext output cannot use the .nxt extension.\n"
         "Password: --password-file PATH | --password-stdin | --password TEXT (unsafe)\n");
 }
 } // namespace
 
-bool is_nxt_file(const char *path) {
-    std::ifstream f(path,std::ios::binary);
-    char b[8];return (bool)f.read(b,8) && memcmp(b,MAGIC,8)==0;
-}
-bool is_legacy_file(const char *path) {
-    std::ifstream f(path,std::ios::binary);
-    char b[8];return (bool)f.read(b,8) && memcmp(b,"psotnic",7)==0 && b[7]=='\0';
-}
 void set_password_argument(const char *arg) {
     ready();wipe(password_arg);password_arg=arg;has_password_arg=true;
     password_path.clear();stdin_password=false;
@@ -430,7 +417,7 @@ bool cached_key(const char *path,const unsigned char *header,bool userlist,unsig
         for(const char *suffix : {".cfg.nxt",".ul.nxt",".nxt"}) {
             const size_t len=strlen(suffix);
             if(cache_path.size()>=len &&
-               cache_path.compare(cache_path.size()-len,len,suffix)==0) {
+               !strncasecmp(cache_path.c_str()+cache_path.size()-len,suffix,len)) {
                 cache_path.resize(cache_path.size()-len);
                 break;
             }
@@ -526,20 +513,9 @@ void session_save_encrypted(std::string& plaintext,const char *path,
     sodium_memzero(mac,sizeof(mac));
     sodium_memzero(header,sizeof(header));
 }
-// A plaintext session must never silently downgrade an encrypted file.
-void plaintext_guard(const char *path,const char *what) {
-    const size_t pathlen=strlen(path);
-    if(pathlen>=4 && memcmp(path+pathlen-4,".nxt",4)==0)
-        throw std::runtime_error(std::string("refusing to write plaintext ")+what+
-                                 " into .nxt; explicitly encrypt first");
-    if(is_nxt_file(path) || is_legacy_file(path))
-        throw std::runtime_error(std::string("refusing to overwrite an encrypted ")+what+
-                                 " with plaintext");
-}
 // Prepare an encrypted replica without creating an empty userlist on disk.
 void prepare_missing_userlist(const char *path) {
-    const size_t len=strlen(path);
-    if(len<4 || strcmp(path+len-4,".nxt")!=0) return;
+    if(!has_nxt_extension(path)) return;
     if(ul_active) throw std::runtime_error("userlist session already active");
     ready();
     unsigned char header[HDR]={0};
@@ -603,8 +579,6 @@ void save_config_data(std::string& plaintext,const char *path) {
     }
 }
 int userlist_command(int argc,char **argv) {
-    if(argc>2 && !strcmp(argv[2],"import"))
-        return nxtlegacy::import_userlist_command(argc,argv);
     return config_command(argc,argv);
 }
 
@@ -621,8 +595,6 @@ void encrypt_plaintext_to_file(const std::string& content, const char *path) {
     } catch(...) {wipe(pass);throw;}
 }
 int config_command(int argc,char **argv) {
-    if(argc>2 && !strcmp(argv[2],"import"))
-        return nxtlegacy::import_command(argc,argv);
     if(argc<4) {usage();return 1;}
     std::string action=argv[2];
     const char *input=argv[3], *output=NULL;

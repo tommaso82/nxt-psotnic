@@ -20,7 +20,10 @@
 
 #include "prots.h"
 #include "global-var.h"
+#include "nxt-file.h"
+#ifdef HAVE_NXTCRYPT
 #include "nxt-crypto.h"
+#endif
 #include <stdexcept>
 
 void expertMode();
@@ -517,8 +520,12 @@ void createInitialConfig(bool expMode)
 	printMessage( "For usage and NXT options, run ./bin/psotnic --help from the project root or read README.md" );
 
     // Normal wizard decides at the beginning; expert wizard decides after exit.
+#ifdef HAVE_NXTCRYPT
     const bool encrypt_choice = expMode ? false :
         readUserYesNo("Encrypt config and userlist with NXTCRYPT?", false);
+#else
+    const bool encrypt_choice = false;
+#endif
 
     if(expMode)
     {
@@ -715,9 +722,13 @@ void createInitialConfig(bool expMode)
         else
                 config.bottype = BOT_LEAF;
 
+#ifdef HAVE_NXTCRYPT
     const bool encrypted = expMode ?
         readUserYesNo("Encrypt config and userlist with NXTCRYPT?", false) :
         encrypt_choice;
+#else
+    const bool encrypted = encrypt_choice;
+#endif
 
     // Point to the encrypted userlist *before* serializing the config,
     // including when a custom userlist path was selected in expert mode.
@@ -740,6 +751,7 @@ void createInitialConfig(bool expMode)
         (encrypted ? ".cfg.nxt" : ".cfg");
 	readUserInput( "Where should the config file be saved?", config.file, defaultcfgfile.c_str());
 
+#ifdef HAVE_NXTCRYPT
     if(encrypted) {
         try {
             nxtcrypto::begin_wizard_encryption(); // Password & confirmation once
@@ -748,12 +760,15 @@ void createInitialConfig(bool expMode)
             ::exit(1);
         }
     }
+#endif
 
 	e = config.save();
 	if (!e->ok)
 	{
 		printError( (const char*)e->reason );
+#ifdef HAVE_NXTCRYPT
         if(encrypted) nxtcrypto::finish_wizard_encryption();
+#endif
 		exit(1);
 	}
 	printMessage( (const char*)e->reason );
@@ -781,7 +796,9 @@ void createInitialConfig(bool expMode)
 			userlist.updated(false);
             if(!userlist.save(config.userlist_file)) {
                 printError("Cannot save userlist %s", (const char *)config.userlist_file);
+#ifdef HAVE_NXTCRYPT
                 if(encrypted) nxtcrypto::finish_wizard_encryption();
+#endif
                 ::exit(1);
             }
             printMessage("userlist saved as %s%s",
@@ -790,10 +807,12 @@ void createInitialConfig(bool expMode)
 		}
 	}
 
+#ifdef HAVE_NXTCRYPT
     if(encrypted) {
         nxtcrypto::finish_wizard_encryption();
         printMessage("NXTCRYPT setup completed; use the same password for config and userlist.");
     }
+#endif
 	exit(0);
 }
 

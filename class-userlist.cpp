@@ -20,8 +20,11 @@
 
 #include "prots.h"
 #include "global-var.h"
+#include "nxt-file.h"
+#ifdef HAVE_NXTCRYPT
 #include "nxt-crypto.h"
 #include <sodium.h>
+#endif
 #include <stdexcept>
 #include <string>
 #ifdef __GLIBC__
@@ -1717,10 +1720,15 @@ bool ul::save(const char *file, const int cypher, const char *key)
         return false;
     }
 
+#ifdef HAVE_NXTCRYPT
     const bool encrypted=nxtcrypto::userlist_encrypted_session();
+#else
+    const bool encrypted=false;
+#endif
     std::string plain;
     inetconn stream;
     try {
+#ifdef HAVE_NXTCRYPT
         if(encrypted) {
             struct stat previous;
             if(::stat(file,&previous)==0 && S_ISREG(previous.st_mode) &&
@@ -1728,8 +1736,10 @@ bool ul::save(const char *file, const int cypher, const char *key)
                 plain.reserve(static_cast<size_t>(previous.st_size));
             stream.capture=&plain;
             stream.status=STATUS_FILE;
-        } else {
-            nxtcrypto::plaintext_guard(file,"userlist");
+        } else
+#endif
+        {
+            nxtfile::plaintext_guard(file,"userlist");
             stream.fd=::open(file,O_WRONLY|O_CREAT|O_TRUNC|O_NOFOLLOW,0600);
             if(stream.fd<0) throw std::runtime_error("cannot open userlist");
             stream.status=STATUS_FILE;
@@ -1752,6 +1762,7 @@ bool ul::save(const char *file, const int cypher, const char *key)
         stream.send("%s %ld",S_TIMESTAMP,userlist.timestamp);
         stream.capture=NULL;
 
+#ifdef HAVE_NXTCRYPT
         if(encrypted) {
             nxtcrypto::save_userlist_data(plain,file);
             sodium_memzero(&plain[0],plain.size());
@@ -1760,7 +1771,9 @@ bool ul::save(const char *file, const int cypher, const char *key)
 #ifdef __GLIBC__
             malloc_trim(0);
 #endif
-        } else {
+        } else
+#endif
+        {
             const bool failed=stream.status & STATUS_FILE_ERROR;
             const int fd=stream.fd;
             stream.fd=0;
@@ -1770,6 +1783,7 @@ bool ul::save(const char *file, const int cypher, const char *key)
         nextSave=0;
         return true;
     } catch(const std::exception& e) {
+#ifdef HAVE_NXTCRYPT
         if(!plain.empty()) sodium_memzero(&plain[0],plain.size());
         if(encrypted) {
             plain.clear();
@@ -1778,6 +1792,7 @@ bool ul::save(const char *file, const int cypher, const char *key)
             malloc_trim(0);
 #endif
         }
+#endif
         fprintf(stderr,"[-] Cannot save userlist %s: %s\n",file,e.what());
         nextSave=NOW+SAVEDELAY;
         return false;
@@ -1797,12 +1812,13 @@ int ul::load(const char *file, const int cypher, const char *key)
         fprintf(stderr,"[-] Cannot inspect userlist %s: %s\n",file,strerror(errno));
         exit(1);
     }
-    if(nxtcrypto::is_legacy_file(file)) {
+    if(nxtfile::is_legacy_file(file)) {
         fprintf(stderr,"[-] Legacy encrypted userlist detected: use userlist import\n");
         exit(1);
     }
 
-    if(nxtcrypto::is_nxt_file(file)) {
+#ifdef HAVE_NXTCRYPT
+    if(nxtfile::is_nxt_file(file)) {
         std::string plaintext;
         try {
             plaintext=nxtcrypto::load_userlist_data(file);
@@ -1828,9 +1844,14 @@ int ul::load(const char *file, const int cypher, const char *key)
             fprintf(stderr,"[-] Encrypted userlist load failed: %s\n",e.what());
             exit(1); // Never fall back to plaintext or overwrite ciphertext.
         }
-    } else {
-        const std::string name(file);
-        if(name.size()>=4 && name.substr(name.size()-4)==".nxt") {
+    } else
+#endif
+    {
+        if(nxtfile::is_nxt_file(file)) {
+            fprintf(stderr,"[-] NXTCRYPT support was not compiled in: %s\n",file);
+            exit(1);
+        }
+        if(nxtfile::has_nxt_extension(file)) {
             fprintf(stderr,"[-] Refusing malformed or missing NXT userlist %s\n",file);
             exit(1);
         }

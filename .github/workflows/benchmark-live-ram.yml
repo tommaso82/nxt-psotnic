@@ -1,0 +1,86 @@
+name: Compare live bot RAM
+on:
+  workflow_dispatch:
+  push:
+    branches: [devel, 'test/optional-nxtcrypt']
+    paths:
+      - 'configure'
+      - 'tests/test.pm'
+      - 'nxt-file.*'
+      - 'nxt-crypto.*'
+      - 'nxt-legacy.*'
+      - 'main.cpp'
+      - 'config-load.cpp'
+      - 'class-options.cpp'
+      - 'class-userlist.cpp'
+      - 'class-inet.cpp'
+      - '.github/workflows/benchmark-live-ram.yml'
+      - 'tests/bench-live-config.cpp'
+      - 'tests/benchmark-live-ram.py'
+jobs:
+  live-bot-ram:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout authentic gay-psotnic
+        uses: actions/checkout@v4
+        with:
+          repository: psotnic/gay-psotnic
+          ref: 2bd6db1ecd84bc8f2ae90aae58de5ee3fe0263c2
+          path: classic
+          persist-credentials: false
+      - name: Install compiler and crypto dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential perl libssl-dev libsodium-dev
+      - name: Build original and both NXT variants with equivalent debug settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd classic && perl configure --disable-modules --disable-adns && make debug)
+          g++ -std=c++11 -O2 -Iclassic classic/class-blowfish.cpp tests/bench-live-config.cpp -o /tmp/bench-original-encrypt
+          mkdir ../nxt-min ../nxt-crypt
+          tar -cf - --exclude=.git --exclude=classic --exclude=bin . | (cd ../nxt-min && tar -xf -)
+          tar -cf - --exclude=.git --exclude=classic --exclude=bin . | (cd ../nxt-crypt && tar -xf -)
+          (cd ../nxt-min && perl configure --disable-modules --disable-adns && make debug)
+          (cd ../nxt-crypt && perl configure --enable-nxtcrypt --disable-modules --disable-adns && make debug)
+      - name: Compare 5 actual running bot variants (5 repeats per case)
+        run: |
+          python3 tests/benchmark-live-ram.py \
+            --classic classic/bin/psotnic \
+            --nxt-min ../nxt-min/bin/psotnic \
+            --nxt-crypt ../nxt-crypt/bin/psotnic \
+            --classic-encrypt /tmp/bench-original-encrypt \
+            --repeats 5
+
+  nxt-plaintext-memory:
+    name: Explain NXTCRYPT compiled-in RAM overhead (plaintext only)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential perl libsodium-dev
+      - name: Build two NXT binaries from identical source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir ../nxt-min ../nxt-crypt
+          tar -cf - --exclude=.git --exclude=bin . | (cd ../nxt-min && tar -xf -)
+          tar -cf - --exclude=.git --exclude=bin . | (cd ../nxt-crypt && tar -xf -)
+          (cd ../nxt-min && perl configure --disable-modules --disable-adns && make debug)
+          (cd ../nxt-crypt && perl configure --enable-nxtcrypt --disable-modules --disable-adns && make debug)
+      - name: Inspect binary sizes and shared library dependencies
+        run: |
+          echo "== Minimal build =="
+          ls -lh ../nxt-min/bin/psotnic
+          size ../nxt-min/bin/psotnic
+          ldd ../nxt-min/bin/psotnic
+          echo "== NXTCRYPT compiled in =="
+          ls -lh ../nxt-crypt/bin/psotnic
+          size ../nxt-crypt/bin/psotnic
+          ldd ../nxt-crypt/bin/psotnic
+      - name: Measure each mapped memory area in 20 live plaintext bot starts
+        run: |
+          python3 tests/benchmark-live-ram.py --nxt-only \
+            --nxt-min ../nxt-min/bin/psotnic \
+            --nxt-crypt ../nxt-crypt/bin/psotnic --repeats 5

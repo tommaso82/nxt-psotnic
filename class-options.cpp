@@ -20,8 +20,11 @@
 
 #include "prots.h"
 #include "global-var.h"
+#include "nxt-file.h"
+#ifdef HAVE_NXTCRYPT
 #include "nxt-crypto.h"
 #include <sodium.h>
+#endif
 #include <string>
 #include <stdexcept>
 
@@ -547,15 +550,22 @@ options::event *CONFIG::save(bool decrypted)
         return &_event;
     }
 
+#ifdef HAVE_NXTCRYPT
     const bool encrypted=nxtcrypto::config_encrypted_session();
+#else
+    const bool encrypted=false;
+#endif
     std::string plain;
     inetconn conf;
     try {
+#ifdef HAVE_NXTCRYPT
         if(encrypted) {
             conf.capture=&plain;
             conf.status=STATUS_FILE;
-        } else {
-            nxtcrypto::plaintext_guard(file,"config");
+        } else
+#endif
+        {
+            nxtfile::plaintext_guard(file,"config");
             conf.fd=::open(file,O_WRONLY|O_CREAT|O_TRUNC|O_NOFOLLOW,0600);
             if(conf.fd<0) throw std::runtime_error("cannot open config");
             conf.status=STATUS_FILE;
@@ -574,9 +584,12 @@ options::event *CONFIG::save(bool decrypted)
         conf.capture=NULL;
 
         if(!emitted) throw std::runtime_error("empty configuration");
+#ifdef HAVE_NXTCRYPT
         if(encrypted) {
             nxtcrypto::save_config_data(plain,file);
-        } else {
+        } else
+#endif
+        {
             const bool failed=conf.status & STATUS_FILE_ERROR;
             const int fd=conf.fd;
             conf.fd=0;
@@ -585,11 +598,15 @@ options::event *CONFIG::save(bool decrypted)
         }
     } catch(const std::exception& e) {
         conf.capture=NULL;
+#ifdef HAVE_NXTCRYPT
         if(!plain.empty()) sodium_memzero(&plain[0],plain.size());
+#endif
         _event.setError(NULL,"cannot save config '%s/%s': %s",cwd,(const char *)file,e.what());
         return &_event;
     }
+#ifdef HAVE_NXTCRYPT
     if(!plain.empty()) sodium_memzero(&plain[0],plain.size());
+#endif
     if(encrypted)
         _event.setOk(NULL,"config file has been saved (NXT encrypted)");
     else

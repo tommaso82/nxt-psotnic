@@ -20,11 +20,16 @@
 
 #include "prots.h"
 #include "global-var.h"
+#include "nxt-file.h"
+#ifdef HAVE_NXTCRYPT
 #include "nxt-crypto.h"
+#endif
 #include "nxt-proxy.h"
 #include <string>
 #include <stdexcept>
+#ifdef HAVE_NXTCRYPT
 #include <sodium.h>
+#endif
 
 void CONFIG::load(const char *file, bool decrypted)
 {
@@ -47,13 +52,21 @@ void CONFIG::load(const char *file, bool decrypted)
 	getcwd(cwd, MAX_LEN);
 
 	(void)decrypted; // Historical debug flag; the format determines how we read.
-	bool encrypted = nxtcrypto::is_nxt_file(file);
+#ifdef HAVE_NXTCRYPT
+	bool encrypted = nxtfile::is_nxt_file(file);
 	std::string plaintext;
 	size_t pos = 0;
-	if(nxtcrypto::is_legacy_file(file)) {
+#else
+    if(nxtfile::is_nxt_file(file)) {
+        fprintf(stderr,"[-] NXTCRYPT support was not compiled in\n");
+        exit(1);
+    }
+#endif
+	if(nxtfile::is_legacy_file(file)) {
 		printf("[-] Legacy Blowfish config detected. Import it before startup.\n");
 		exit(1);
 	}
+#ifdef HAVE_NXTCRYPT
 	if(encrypted) {
 		try {
 			plaintext = nxtcrypto::decrypt_file(file);
@@ -64,7 +77,9 @@ void CONFIG::load(const char *file, bool decrypted)
 			exit(1);
 		}
 		printf("[*] Loading NXT encrypted config from '%s/%s'\n", cwd, file);
-	} else {
+	} else
+#endif
+    {
 		printf("[*] Loading plaintext config from '%s/%s'\n", cwd, file);
 		if(f.open(file, O_RDONLY) < 0) {
 			printf("[-] Cannot open config file '%s/%s': %s\n", cwd, file, strerror(errno));
@@ -74,6 +89,7 @@ void CONFIG::load(const char *file, bool decrypted)
 
 	while(1)
 	{
+#ifdef HAVE_NXTCRYPT
 		if(encrypted) {
 			if(pos >= plaintext.size()) break;
 			size_t end = plaintext.find('\n', pos);
@@ -88,7 +104,9 @@ void CONFIG::load(const char *file, bool decrypted)
 			n = static_cast<int>(count);
 			if(n && buf[n-1]=='\r') buf[--n]='\0';
 			pos = (end == plaintext.size()) ? end : end + 1;
-		} else n = f.readln(buf, MAX_LEN);
+		} else
+#endif
+        n = f.readln(buf, MAX_LEN);
 		if(n == -1) break;
 		if(!n) continue;
 
@@ -128,7 +146,9 @@ void CONFIG::load(const char *file, bool decrypted)
             if(!alt[i].isDefault())resolve_direct(alt[i].getHost());
     }
 #endif
+#ifdef HAVE_NXTCRYPT
 	if(encrypted && !plaintext.empty()) sodium_memzero(&plaintext[0], plaintext.size());
+#endif
 
 	/* Basic checks */
 	if(!nick.getLen())
