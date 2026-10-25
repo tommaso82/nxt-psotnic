@@ -1,6 +1,8 @@
 # nxt-psotnic
 
-nxt-psotnic is a fork of gay-psotnic 0.1.1, preserving full compatibility with classic Psotnic's IRC and botnet behavior. It streamlines configuration management with plaintext by default and optional NXTCRYPT encryption, alongside legacy Blowfish import and outbound SOCKS5 / HTTP CONNECT support.
+nxt-psotnic is a fork of gay-psotnic 0.1.1, preserving full compatibility with classic Psotnic's IRC and botnet behavior. It streamlines configuration management with plaintext by default and optional NXTCRYPT encryption, alongside outbound SOCKS5 / HTTP CONNECT support.
+
+It can also import classic Psotnic's Blowfish-encrypted configurations and userlists, recovering the seed from a supported original bot binary when `seed.h` is unavailable.
 
 Current version: **0.1.0-dev**. The executable is still named `psotnic`.
 
@@ -46,7 +48,14 @@ Legacy Blowfish import remains available in the default build. NXTCRYPT uses Arg
 
 **Unattended startup.** Run `./bin/psotnic --key-cache bot.cfg.nxt` once and enter the password. The bot saves a private `bot.key` file containing randomized representations of the derived config and userlist keys, never the original password. Subsequent starts use `./bin/psotnic bot.cfg.nxt` without prompting; removing the cache restores password-based startup. Protect the cache like a decryption key. File-management `decrypt` and `preview` commands always require the password.
 
-Classic Psotnic's Blowfish-encrypted configurations and userlists can be imported using the original bot binary. For supported builds, nxt-psotnic extracts the encryption seed directly from the binary without executing it; the original seed file can also be supplied. The `config` and `userlist` commands support import, decryption and preview. See [encrypted storage](docs/NXT-CONFIG-CRYPTO.md) for usage, supported formats and password handling.
+Import classic Psotnic's Blowfish-encrypted files into plaintext using a supported original bot binary:
+
+```sh
+./bin/psotnic config import old.cfg --binary oldbot --output bot.cfg
+./bin/psotnic userlist import old.ul --binary oldbot --output bot.ul
+```
+
+The binary is never executed. If available, `seed.h` can be supplied with `--seed-file` instead. See [encrypted storage](docs/NXT-CONFIG-CRYPTO.md) for encrypted migration and other options.
 
 ## Outbound proxy
 
