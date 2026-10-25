@@ -18,6 +18,8 @@ perl configure --enable-nxtcrypt --disable-modules
 make dynamic
 ```
 
+NXTCRYPT is not compiled by default. Enable it explicitly with `--enable-nxtcrypt` (requires `libsodium-dev`).
+
 The executable is built at `bin/psotnic`.
 
 ## Getting started
@@ -33,7 +35,7 @@ Use `-d` to keep the bot in the foreground. Run `./bin/psotnic --help` for all s
 
 ## Encrypted files
 
-NXTCRYPT is optional at build time (`--enable-nxtcrypt` requires `libsodium-dev`). Legacy Blowfish import remains available in the default build. NXTCRYPT uses Argon2id and XChaCha20-Poly1305. Configuration saves and userlist autosaves retain encryption when the corresponding file is encrypted.
+Legacy Blowfish import remains available in the default build. NXTCRYPT uses Argon2id and XChaCha20-Poly1305. Configuration saves and userlist autosaves retain encryption when the corresponding file is encrypted.
 
 ```sh
 ./bin/psotnic config encrypt bot.cfg --output bot.cfg.nxt
