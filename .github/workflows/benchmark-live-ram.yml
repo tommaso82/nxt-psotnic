@@ -2,8 +2,18 @@ name: Compare live bot RAM
 on:
   workflow_dispatch:
   push:
-    branches: ['test/optional-nxtcrypt']
+    branches: [devel, 'test/optional-nxtcrypt']
     paths:
+      - 'configure'
+      - 'tests/test.pm'
+      - 'nxt-file.*'
+      - 'nxt-crypto.*'
+      - 'nxt-legacy.*'
+      - 'main.cpp'
+      - 'config-load.cpp'
+      - 'class-options.cpp'
+      - 'class-userlist.cpp'
+      - 'class-inet.cpp'
       - '.github/workflows/benchmark-live-ram.yml'
       - 'tests/bench-live-config.cpp'
       - 'tests/benchmark-live-ram.py'
@@ -33,7 +43,7 @@ jobs:
           tar -cf - --exclude=.git --exclude=classic --exclude=bin . | (cd ../nxt-crypt && tar -xf -)
           (cd ../nxt-min && perl configure --disable-modules --disable-adns && make debug)
           (cd ../nxt-crypt && perl configure --enable-nxtcrypt --disable-modules --disable-adns && make debug)
-      - name: Compare 4 actual running bots (5 repeats per case)
+      - name: Compare 5 actual running bot variants (5 repeats per case)
         run: |
           python3 tests/benchmark-live-ram.py \
             --classic classic/bin/psotnic \

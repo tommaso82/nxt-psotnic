@@ -2,8 +2,18 @@ name: Compare original and minimal NXT memory maps
 on:
   workflow_dispatch:
   push:
-    branches: ['test/optional-nxtcrypt']
+    branches: [devel, 'test/optional-nxtcrypt']
     paths:
+      - 'configure'
+      - 'tests/test.pm'
+      - 'nxt-file.*'
+      - 'nxt-crypto.*'
+      - 'nxt-legacy.*'
+      - 'main.cpp'
+      - 'config-load.cpp'
+      - 'class-options.cpp'
+      - 'class-userlist.cpp'
+      - 'class-inet.cpp'
       - '.github/workflows/benchmark-original-minimal-memory.yml'
       - 'tests/benchmark-live-ram.py'
 jobs:
