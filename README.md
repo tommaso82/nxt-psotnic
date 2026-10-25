@@ -9,16 +9,18 @@ Current version: **0.1.0-dev**. The executable is still named `psotnic`.
 On Debian, install the build dependencies and run the following from the repository root:
 
 ```sh
-sudo apt install build-essential perl libssl-dev
+sudo apt install build-essential perl
 perl configure --disable-modules
 make dynamic
+
+# TLS is enabled automatically when libssl-dev is installed.
 
 # Optional encrypted storage (requires libsodium-dev):
 perl configure --enable-nxtcrypt --disable-modules
 make dynamic
 ```
 
-NXTCRYPT is not compiled by default. Enable it explicitly with `--enable-nxtcrypt` (requires `libsodium-dev`).
+NXTCRYPT is not compiled by default. Enable it explicitly with `--enable-nxtcrypt`.
 
 The executable is built at `bin/psotnic`.
 
