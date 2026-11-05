@@ -43,7 +43,7 @@ def run_case(family, address, listener, authorized):
         try:
             for name, file in (("main", "main.cfg"), ("leaf", "leaf.cfg")):
                 logs[name] = (folder / (name + ".log")).open("wb")
-                procs.append(subprocess.Popen([BINARY, "-d", file],
+                procs.append(subprocess.Popen([BINARY, "-d", "-T", file],
                     cwd=folder, stdin=subprocess.DEVNULL,
                     stdout=logs[name], stderr=subprocess.STDOUT))
                 if name == "main":
