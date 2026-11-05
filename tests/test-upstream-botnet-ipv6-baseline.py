@@ -69,9 +69,14 @@ def run_case(family, address, listener, authorized):
                 deadline = time.monotonic() + 8
                 while time.monotonic() < deadline:
                     f = folder / "leaf.ul"
-                    if f.exists() and b"21 42" in f.read_bytes():
-                        status = "LINK_OK"
-                        break
+                    if f.exists():
+                        raw = f.read_bytes()
+                        if raw.startswith(b"psotnic") and len(raw) > 64:
+                            decoded = subprocess.run([UL_ENCODER, "--verify", str(f)],
+                                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            if decoded.returncode == 0:
+                                status = "LINK_OK"
+                                break
                     if any(p.poll() is not None for p in procs):
                         status = "PROCESS_EXIT"
                         break
