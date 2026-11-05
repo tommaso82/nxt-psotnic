@@ -12,15 +12,16 @@ UL_ENCODER = str(Path(sys.argv[2]).resolve())
 PASS = "nxt-ipv6-botnet-test-secret"
 HASH = "ca61d593021ab048776dc28a37177b01"
 
-def run_case(family, address, listener, authorized):
+def run_case(family, address, listener, authorized, restricted):
     with tempfile.TemporaryDirectory(prefix="gay-ipv6-baseline-") as work:
         folder = Path(work)
         with socket.socket(family, socket.SOCK_STREAM) as probe:
             probe.bind((address, 0))
             port = probe.getsockname()[1]
         listed = address if authorized else ("2001:db8::123" if family == socket.AF_INET6 else "192.0.2.123")
+        legacy_ip = "192.0.2.254" if restricted else "0.0.0.0"
         (folder / "main.ul.plain").write_text(
-            "13 leafbot 1 1 0.0.0.0 integration\n"
+            f"13 leafbot 1 1 {legacy_ip} integration\n"
             "19 leafbot +l\n"
             f"30 leafbot {HASH}\n"
             f"80 leafbot {listed}\n"
@@ -103,7 +104,7 @@ def run_case(family, address, listener, authorized):
                   f"{mainlog[-2000:]!r}", flush=True)
         expected = status == "LINK_OK" if authorized else status != "LINK_OK"
         label = "IPv6" if family == socket.AF_INET6 else "IPv4"
-        print(f"BASELINE family={label} listener={listener} "
+        print(f"BASELINE family={label} listener={listener} numeric_ip={legacy_ip} "
               f"listed_ip={'matching' if authorized else 'mismatching'} "
               f"result={status} reason={reason} "
               f"policy={'EXPECTED' if expected else 'UNEXPECTED'}", flush=True)
@@ -111,11 +112,12 @@ def run_case(family, address, listener, authorized):
 
 def main():
     results = []
+    restricted = "--restrict" in sys.argv[3:]
     for access in ("all", "bots"):
         for family, host in ((socket.AF_INET, "127.0.0.1"), (socket.AF_INET6, "::1")):
             for authorized in (True, False):
-                results.append(run_case(family, host, access, authorized))
-    print("BASELINE_SUMMARY " + " ; ".join(
+                results.append(run_case(family, host, access, authorized, restricted))
+    print(f"BASELINE_SUMMARY restricted={restricted} " + " ; ".join(
         f"{family}/{access}/{'allow' if authorized else 'deny'}={status}"
         for family, access, authorized, status, _ in results), flush=True)
     if any(status in ("MAIN_EXIT", "NO_LISTENER", "PROCESS_EXIT") for _,_,_,status,_ in results):
