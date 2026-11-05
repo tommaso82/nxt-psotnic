@@ -28,5 +28,7 @@ jobs:
           perl configure --disable-modules
           make debug
           test -x bin/psotnic
+      - name: Prepare classic encrypted userlist from original seed
+        run: g++ -std=c++11 -O0 -Iclassic classic/class-blowfish.cpp tests/test-upstream-ul-encode.cpp -o ./classic-ul-encoder
       - name: Real baseline MAIN/LEAF IPv4 IPv6 and IP filtering
-        run: python3 tests/test-upstream-botnet-ipv6-baseline.py classic/bin/psotnic
+        run: python3 tests/test-upstream-botnet-ipv6-baseline.py classic/bin/psotnic ./classic-ul-encoder

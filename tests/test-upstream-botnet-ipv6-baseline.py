@@ -8,6 +8,7 @@ import tempfile
 import time
 
 BINARY = str(Path(sys.argv[1]).resolve())
+UL_ENCODER = str(Path(sys.argv[2]).resolve())
 PASS = "nxt-ipv6-botnet-test-secret"
 HASH = "ca61d593021ab048776dc28a37177b01"
 
@@ -18,13 +19,14 @@ def run_case(family, address, listener, authorized):
             probe.bind((address, 0))
             port = probe.getsockname()[1]
         listed = address if authorized else ("2001:db8::123" if family == socket.AF_INET6 else "192.0.2.123")
-        (folder / "main.ul").write_text(
+        (folder / "main.ul.plain").write_text(
             "13 leafbot 1 1 0.0.0.0 integration\n"
             "19 leafbot +l\n"
             f"30 leafbot {HASH}\n"
             f"80 leafbot {listed}\n"
             "21 42\n82 1700000000\n"
         )
+        subprocess.run([UL_ENCODER, str(folder / "main.ul.plain"), str(folder / "main.ul")], check=True)
         (folder / "main.cfg").write_text(
             "nick mainhub\nident mainhub\nhandle mainhub\n"
             "dontfork ON\nuserlist main.ul\n"
