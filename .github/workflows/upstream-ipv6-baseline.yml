@@ -1,4 +1,4 @@
-name: Baseline: unmodified gay-psotnic IPv6
+name: 'Baseline: unmodified gay-psotnic IPv6'
 on:
   push:
     branches:
