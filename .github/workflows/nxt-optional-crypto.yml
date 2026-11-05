@@ -22,9 +22,11 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: Install non-NXTCRYPT build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev build-essential perl
       - name: Build without libsodium
         run: |
-          perl configure --disable-nxtcrypt --disable-adns --disable-ssl --disable-modules
+          perl configure --disable-nxtcrypt --disable-adns --disable-modules
           grep -q NXTCRYPT_DISABLED Makefile.dynamic
           if grep -q -- '-lsodium' Makefile.dynamic; then exit 1; fi
           make dynamic
@@ -47,7 +49,7 @@ jobs:
           prepare: |
             pkg install -y perl5 gcc
           run: |
-            perl configure --disable-nxtcrypt --disable-ssl --disable-modules
+            perl configure --disable-nxtcrypt --disable-modules
             make dynamic
             test -x bin/psotnic
             ./bin/psotnic --help | grep -q 'NXTCRYPT: disabled'
