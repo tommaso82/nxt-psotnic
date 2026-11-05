@@ -21,7 +21,6 @@
 #include "prots.h"
 #include "global-var.h"
 #include "nxt-crypto.h"
-#include <sodium.h>
 #include <stdexcept>
 #include <string>
 #ifdef __GLIBC__
@@ -1754,7 +1753,7 @@ bool ul::save(const char *file, const int cypher, const char *key)
 
         if(encrypted) {
             nxtcrypto::save_userlist_data(plain,file);
-            sodium_memzero(&plain[0],plain.size());
+            nxtcrypto::secure_zero(&plain[0],plain.size());
             plain.clear();
             plain.shrink_to_fit();
 #ifdef __GLIBC__
@@ -1770,7 +1769,7 @@ bool ul::save(const char *file, const int cypher, const char *key)
         nextSave=0;
         return true;
     } catch(const std::exception& e) {
-        if(!plain.empty()) sodium_memzero(&plain[0],plain.size());
+        if(!plain.empty()) nxtcrypto::secure_zero(&plain[0],plain.size());
         if(encrypted) {
             plain.clear();
             plain.shrink_to_fit();
@@ -1822,9 +1821,9 @@ int ul::load(const char *file, const int cypher, const char *key)
                 if(line[0] && line[0]!='#' && line[0]!=';') parse(line);
                 pos=end==plaintext.size()?end:end+1;
             }
-            if(!plaintext.empty()) sodium_memzero(&plaintext[0],plaintext.size());
+            if(!plaintext.empty()) nxtcrypto::secure_zero(&plaintext[0],plaintext.size());
         } catch(const std::exception &e) {
-            if(!plaintext.empty()) sodium_memzero(&plaintext[0],plaintext.size());
+            if(!plaintext.empty()) nxtcrypto::secure_zero(&plaintext[0],plaintext.size());
             fprintf(stderr,"[-] Encrypted userlist load failed: %s\n",e.what());
             exit(1); // Never fall back to plaintext or overwrite ciphertext.
         }

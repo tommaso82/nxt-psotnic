@@ -4,7 +4,7 @@ use strict;
 use FileHandle;
 use Getopt::Long;
 
-our ($antiptrace, $noircbacktrace, $ssl, $disable_ssl, $disable_modules, $little_endian, $big_endian, $cc_prefix, $cc_options, $ld_options, $disable_adns, $firedns, $prefix, $bindir, $includesdir, $modulesdir, $confdir, $help);
+our ($antiptrace, $noircbacktrace, $ssl, $disable_ssl, $disable_modules, $disable_nxtcrypt, $little_endian, $big_endian, $cc_prefix, $cc_options, $ld_options, $disable_adns, $firedns, $prefix, $bindir, $includesdir, $modulesdir, $confdir, $help);
 
 if(!GetOptions(
 	"--with-antiptrace" => \$antiptrace,
@@ -19,6 +19,7 @@ if(!GetOptions(
 	"--disable-ssl" => \$disable_ssl,
 	"--with-firedns" => \$firedns,
 	"--disable-modules" => \$disable_modules,
+	"--disable-nxtcrypt" => \$disable_nxtcrypt,
 	"--prefix:s" => \$prefix,
 	"--help" => \$help))
 {
@@ -41,6 +42,7 @@ if($help)
 	print "  --disable-ssl     \tDisable SSL support\n";
 	print "  --with-firedns    \tEnable the FireDNS resolver\n";
 	print "  --disable-modules \tDisable module support\n";
+	print "  --disable-nxtcrypt\tBuild without NXTCRYPT / libsodium\n";
 	print "  --prefix          \tPrefix for the installation and search paths            [".$ENV{'HOME'} . "/gay-psotnic]\n";
 	exit;
 }
@@ -168,6 +170,18 @@ print "[*] Operating system: $os\n";
 my ($cflags, $lflags) = getGccOptions();
 
 chdir('..');
+
+if($disable_nxtcrypt)
+{
+	print "[-] Disabling NXTCRYPT (libsodium not required)\n";
+	$cflags .= "-DNXTCRYPT_DISABLED ";
+	$filelist =~ s/nxt-crypto\.o/nxt-crypto-disabled.o/;
+	$filelist =~ s/nxt-legacy\.o//;
+}
+else
+{
+	print "[+] Enabling NXTCRYPT\n";
+}
 
 if($antiptrace)
 {

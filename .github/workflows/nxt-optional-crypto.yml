@@ -1,0 +1,53 @@
+name: Optional NXTCRYPT build
+on:
+  push:
+    branches: [feature/optional-nxtcrypt-build]
+  pull_request:
+    branches: [master]
+    paths:
+      - 'configure'
+      - 'tests/test.pm'
+      - 'nxt-crypto.h'
+      - 'nxt-crypto-disabled.cpp'
+      - 'config-create.cpp'
+      - 'config-load.cpp'
+      - 'class-options.cpp'
+      - 'class-userlist.cpp'
+      - 'functions.cpp'
+      - '.github/workflows/nxt-optional-crypto.yml'
+  workflow_dispatch:
+
+jobs:
+  plaintext-linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build without libsodium
+        run: |
+          perl configure --disable-nxtcrypt --disable-adns --disable-ssl --disable-modules
+          grep -q NXTCRYPT_DISABLED Makefile.dynamic
+          if grep -q -- '-lsodium' Makefile.dynamic; then exit 1; fi
+          make dynamic
+          test -x bin/psotnic
+          if ldd bin/psotnic | grep -q libsodium; then exit 1; fi
+      - name: Verify plaintext-only CLI and proxy regression
+        run: |
+          ./bin/psotnic --help | grep -q 'NXTCRYPT: disabled'
+          ./bin/psotnic config --help | grep -q 'NXTCRYPT: disabled'
+          if ./bin/psotnic config encrypt foo --output bar; then exit 1; fi
+          python3 tests/test-nxt-proxy-integration.py ./bin/psotnic
+  plaintext-freebsd:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: FreeBSD plaintext-only compile
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: '14.5'
+          prepare: |
+            pkg install -y perl5 gcc
+          run: |
+            perl configure --disable-nxtcrypt --disable-ssl --disable-modules
+            make dynamic
+            test -x bin/psotnic
+            ./bin/psotnic --help | grep -q 'NXTCRYPT: disabled'

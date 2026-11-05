@@ -517,8 +517,12 @@ void createInitialConfig(bool expMode)
 	printMessage( "For usage and NXT options, run ./bin/psotnic --help from the project root or read README.md" );
 
     // Normal wizard decides at the beginning; expert wizard decides after exit.
+#ifdef NXTCRYPT_DISABLED
+    const bool encrypt_choice = false;
+#else
     const bool encrypt_choice = expMode ? false :
         readUserYesNo("Encrypt config and userlist with NXTCRYPT?", false);
+#endif
 
     if(expMode)
     {
@@ -715,9 +719,13 @@ void createInitialConfig(bool expMode)
         else
                 config.bottype = BOT_LEAF;
 
+#ifdef NXTCRYPT_DISABLED
+    const bool encrypted = false;
+#else
     const bool encrypted = expMode ?
         readUserYesNo("Encrypt config and userlist with NXTCRYPT?", false) :
         encrypt_choice;
+#endif
 
     // Point to the encrypted userlist *before* serializing the config,
     // including when a custom userlist path was selected in expert mode.

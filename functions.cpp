@@ -21,7 +21,6 @@
 #include "prots.h"
 #include "global-var.h"
 #include "nxt-crypto.h"
-#include <sodium.h>
 #include <sstream>
 #include <unistd.h>  // isatty(STDOUT_FILENO)
 
@@ -352,12 +351,21 @@ static void print_nxt_short_help(const char *exe)
     puts("Quick start:");
     printf("  %s -n                   Create a new bot configuration\n", exe);
     printf("  %s bot.cfg              Start the bot with an existing config\n", exe);
+#ifdef NXTCRYPT_DISABLED
+    printf("  %s -h                   Full guide (options, proxy)\n", exe);
+#else
     printf("  %s -h                   Full guide (options, proxy, encryption)\n", exe);
+#endif
     puts("\nMore: config --help | userlist --help | --version");
 }
 
 static void print_nxt_config_help(const char *exe, bool userlist)
 {
+#ifdef NXTCRYPT_DISABLED
+    (void)exe; (void)userlist;
+    puts("NXTCRYPT: disabled at build time (file crypto and legacy import unavailable).");
+    return;
+#else
     const char *section = userlist ? "userlist" : "config";
     printf("NXT-Psotnic - %s commands\n\n", userlist ? "userlist" : "configuration");
     puts("Encrypt, decrypt, inspect or migrate files without starting the bot.\n");
@@ -388,6 +396,7 @@ static void print_nxt_config_help(const char *exe, bool userlist)
     }
     puts("\nProtect output files and keep your original backups until tested.");
     puts("See README.md for step-by-step instructions.");
+#endif
 }
 
 static void print_nxt_help(const char *exe)
@@ -396,8 +405,12 @@ static void print_nxt_help(const char *exe)
     printf("Usage:\n  %s [OPTIONS] CONFIG_FILE       Start the bot\n",exe);
     printf("  %s -n                          Interactive new-config wizard\n",exe);
     printf("  %s -ne                         Expert configuration wizard\n",exe);
+#ifdef NXTCRYPT_DISABLED
+    puts("  NXTCRYPT: disabled at build time (plaintext files only)");
+#else
     printf("  %s config COMMAND ...         Config crypto / legacy migration\n",exe);
     printf("  %s userlist COMMAND ...       Userlist crypto / legacy migration\n",exe);
+#endif
     puts("\nGeneral options:");
     puts("  -h, --help                    Full help");
     puts("  -v, --version                 Version and build information");
@@ -408,6 +421,7 @@ static void print_nxt_help(const char *exe)
 #ifdef HAVE_DEBUG
     puts("  -T                            Legacy decrypted-config debug flag");
 #endif
+#ifndef NXTCRYPT_DISABLED
     puts("\nStartup password options (for encrypted configs):");
     puts("  --password-file FILE          Password read from file");
     puts("  --password-stdin              Password read from standard input");
@@ -417,6 +431,7 @@ static void print_nxt_help(const char *exe)
     puts("\nFile management:");
     printf("  %s config --help              Encrypt/decrypt/import config files\n",exe);
     printf("  %s userlist --help            Encrypt/decrypt/import userlist files\n",exe);
+#endif
     puts("\nGlobal outgoing proxy (configure INSIDE the bot config file):");
     puts("  proxy-type none|socks5|http   'http' means HTTP CONNECT; none = direct");
     puts("  proxy-host HOST               Hostname or IPv4/IPv6 address");
@@ -431,8 +446,10 @@ static void print_nxt_help(const char *exe)
     puts("     Follow the wizard and note the generated .cfg filename.");
     printf("  2. %s bot.cfg\n",exe);
     puts("     Set 'dontfork ON' in the config to view startup logs.");
+#ifndef NXTCRYPT_DISABLED
     printf("  3. %s config encrypt bot.cfg --output bot.cfg.nxt\n",exe);
     printf("     %s bot.cfg.nxt\n",exe);
+#endif
     puts("\nPaths are relative to your current directory; starting from the");
     puts("repository root is usually easiest (./bin/psotnic bot.cfg).");
     puts("Docs: README.md, docs/NXT-PROXY.md");
@@ -542,7 +559,7 @@ void parse_cmdline(int argc, char *argv[])
 		{
 			++i;
 			nxtcrypto::set_password_argument(argv[i]);
-			sodium_memzero(argv[i], strlen(argv[i]));
+			nxtcrypto::secure_zero(argv[i], strlen(argv[i]));
 		}
 		else if(!strcmp(argv[i], "--password-file") && i+1 < argc)
 			nxtcrypto::set_password_file(argv[++i]);
