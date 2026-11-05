@@ -34,9 +34,6 @@ on:
       - 'configure'
       - 'tests/test.pm'
       - 'tests/sodium.c'
-      - 'tests/test-nxt-botnet-ipv6.py'
-      - 'class-ignore.cpp'
-      - 'parse-bot.cpp'
       - 'tests/test-nxt-crypto.sh'
       - 'tests/nxt-crypto-cli-test.cpp'
       - 'tests/cfg-session-test.cpp'
@@ -159,8 +156,6 @@ jobs:
         run: |
           ./bin/psotnic -h | grep -q 'Legacy decrypted-config debug flag'
           python3 tests/test-nxt-debug-foreground.py ./bin/psotnic
-          python3 tests/test-nxt-botnet-ipv6.py ./bin/psotnic
-          python3 tests/test-nxt-botnet-ipv6.py ./bin/psotnic --negative
 
   bot-build:
     runs-on: ubuntu-24.04
@@ -250,8 +245,6 @@ jobs:
         run: python3 tests/test-nxt-wizard.py ./bin/psotnic
       - name: Real MAIN SLAVE LEAF encrypted-userlist bootstrap and idle RSS
         run: python3 tests/test-userlist-bootstrap-live.py ./bin/psotnic
-      - name: Real IPv4 and IPv6 MAIN/LEAF linking
-        run: python3 tests/test-nxt-botnet-ipv6.py ./bin/psotnic
 
   real-classic-binary:
     name: Recover seed from real upstream gay-psotnic

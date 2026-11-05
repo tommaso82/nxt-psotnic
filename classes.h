@@ -1247,13 +1247,14 @@ class ign
 	class entry
 	{
 		public:
-		unsigned char ip[16]; // IPv4-mapped IPv6 or native IPv6
+		unsigned int ip;
 		int count;
 		time_t nextConn;
 		time_t when;
 
 		int operator==(const entry &e) const;
-		entry(const sockaddr_storage &peer);
+		int operator==(const unsigned int &IP) const;
+		entry(unsigned int IP);
 		time_t creation();
 	};
 
@@ -1262,8 +1263,8 @@ class ign
 	int nextConn;
 	int count;
 
-	entry *hit(const sockaddr_storage &peer);
-	void removeHit(int fd);
+	entry *hit(unsigned int ip);
+	void removeHit(unsigned int ip);
 	int isIgnored(unsigned int ip);
 	void expire();
 	void calcCount();

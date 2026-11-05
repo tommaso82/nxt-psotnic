@@ -1075,19 +1075,14 @@ const char *inet6char(in6_addr *addr)
 int acceptConnection(int fd, bool ssl, inet::listen_entry *le)
 {
 	int n, silent;
-	struct sockaddr_storage from;
-	socklen_t fromsize = sizeof from;
+	struct sockaddr_in from;
+	socklen_t fromsize = sizeof(struct sockaddr_in);
 	const int one = 1;
 	inetconn *c;
 
 	if((n = accept(fd, (sockaddr *) &from, &fromsize)) > 0)
 	{
-		if(from.ss_family != AF_INET
-#ifdef HAVE_IPV6
-		   && from.ss_family != AF_INET6
-#endif
-		) { killSocket(n); return -1; }
-		ign::entry *e = ignore.hit(from);
+		ign::entry *e = ignore.hit(ntohl(from.sin_addr.s_addr));
 
 		if(e->nextConn >= NOW || ignore.nextConn >= NOW)
 		{
@@ -1101,9 +1096,7 @@ int acceptConnection(int fd, bool ssl, inet::listen_entry *le)
 		if(1)
 		{
 			if((le->access & (LISTEN_ALL | LISTEN_USERS))
-				|| ((le->access & LISTEN_BOTS) &&
-				    ((from.ss_family == AF_INET && userlist.isBot(((sockaddr_in &)from).sin_addr.s_addr))
-				     || userlist.isBotByFD(n))))
+				|| ((le->access & LISTEN_BOTS) && (userlist.isBot(from.sin_addr.s_addr) || userlist.isBotByFD(fd))))
 			{
 				fcntl(n, F_SETFL, O_NONBLOCK);
 				setsockopt(n, SOL_SOCKET, SO_KEEPALIVE, &one, sizeof(one));
@@ -1253,14 +1246,17 @@ unsigned int getip4(int fd, int (*fun)(int s, struct sockaddr *name, socklen_t *
 
 int getport(int fd, int (*fun)(int s, struct sockaddr *name, socklen_t *namelen))
 {
-	sockaddr_storage peer;
-	socklen_t len = sizeof peer;
-	if(fun(fd, (sockaddr *)&peer, &len) != 0) return 0;
-#ifdef HAVE_IPV6
-	if(peer.ss_family == AF_INET6)
-		return ntohs(((sockaddr_in6 &)peer).sin6_port);
-#endif
-	return peer.ss_family == AF_INET ? ntohs(((sockaddr_in &)peer).sin_port) : 0;
+	struct sockaddr_in peer;
+	#ifdef _NO_LAME_ERRNO
+	int ret, e = errno;
+	#endif
+	socklen_t peersize = sizeof(struct sockaddr_in);
+	ret = fun(fd, (sockaddr *) &peer, &peersize);
+	#ifdef _NO_LAME_ERRNO
+	errno = e;
+	#endif
+	if(ret == -1) return 0;
+	else return ntohs(peer.sin_port);
 }
 
 int startListening(const char *ip, int port)
@@ -1944,9 +1940,17 @@ char *timestr(const char *format, time_t &t)
 
 int getIpVersion(int fd)
 {
-	sockaddr_storage peer;
-	socklen_t len = sizeof peer;
-	return getsockname(fd, (sockaddr *)&peer, &len) == 0 ? peer.ss_family : AF_UNSPEC;
+
+#ifdef HAVE_IPV6
+	int one;
+	socklen_t len = sizeof(int);
+
+	/* Find out if the open socket is PF_INET or PF_INET6   */
+	if(!getsockopt(fd, IPPROTO_IPV6, IPV6_UNICAST_HOPS, &one, &len))
+		return PF_INET6;
+#endif
+
+	return PF_INET;
 }
 
 /*

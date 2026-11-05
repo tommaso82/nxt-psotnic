@@ -21,18 +21,9 @@
 #include "prots.h"
 #include "global-var.h"
 
-ign::entry::entry(const sockaddr_storage &peer)
+ign::entry::entry(unsigned int IP)
 {
-	memset(ip, 0, sizeof ip);
-	if(peer.ss_family == AF_INET)
-	{
-		ip[10] = ip[11] = 0xff;
-		memcpy(ip + 12, &((const sockaddr_in &)peer).sin_addr, 4);
-	}
-#ifdef HAVE_IPV6
-	else if(peer.ss_family == AF_INET6)
-		memcpy(ip, &((const sockaddr_in6 &)peer).sin6_addr, 16);
-#endif
+	ip = IP;
 	when = NOW;
 	count = 1;
 	nextConn = 0;
@@ -40,7 +31,12 @@ ign::entry::entry(const sockaddr_storage &peer)
 
 int ign::entry::operator==(const entry &e) const
 {
-	return !memcmp(ip, e.ip, sizeof ip);
+	return ip == e.ip;
+}
+
+int ign::entry::operator==(const unsigned int &IP) const
+{
+	return ip == IP;
 }
 
 time_t ign::entry::creation()
@@ -54,43 +50,34 @@ ign::ign()
 	nextConn = 0;
 }
 
-ign::entry *ign::hit(const sockaddr_storage &peer)
+ign::entry *ign::hit(unsigned int ip)
 {
-	entry probe(peer);
-	ptrlist<entry>::iterator p = data.find(probe);
-	entry *e;
+	entry *e = new entry(ip);
+	ptrlist<entry>::iterator p = data.find(*e);
 
 	if(p)
 	{
-		e = p;
-		if(++e->count > set.PERIP_BURST_SIZE && e->nextConn <= NOW)
+		if(++p->count > set.PERIP_BURST_SIZE && p->nextConn <= NOW)
 		{
-			e->nextConn = NOW + set.PERIP_IGNORE_TIME;
-			char addr[INET6_ADDRSTRLEN];
-			const void *src = &((const sockaddr_in &)peer).sin_addr;
-			int family = AF_INET;
-#ifdef HAVE_IPV6
-			if(peer.ss_family == AF_INET6) {
-				family = AF_INET6;
-				src = &((const sockaddr_in6 &)peer).sin6_addr;
-			}
-#endif
-			net.send(HAS_N, "\002Ignoring %s for %d seconds\002",
-			         inet_ntop(family, src, addr, sizeof addr), (int)set.PERIP_IGNORE_TIME);
+			p->nextConn = NOW + set.PERIP_IGNORE_TIME;
+			net.send(HAS_N, "\002Ignoring %s for %d seconds\002", inet2char(ntohl(ip)), (int) set.PERIP_IGNORE_TIME);
 		}
+		delete e;
+		e = p;
 	}
 	else
 	{
-		e = new entry(peer);
 		data.add(e);
 	}
 
 	++count;
+
 	if(count >= set.SYNFLOOD_MAX_CONNS && nextConn <= NOW)
 	{
-		net.send(HAS_N, "Synflood detected, not accepting conections for %d seconds", (int)set.SYNFLOOD_IGNORE_TIME);
+		net.send(HAS_N, "Synflood detected, not accepting conections for %d seconds", (int) set.SYNFLOOD_IGNORE_TIME);
 		nextConn = NOW + set.SYNFLOOD_IGNORE_TIME;
 	}
+
 	return e;
 }
 
@@ -100,18 +87,18 @@ void ign::expire()
 	calcCount();
 }
 
-void ign::removeHit(int fd)
+void ign::removeHit(unsigned int ip)
 {
-	sockaddr_storage peer;
-	socklen_t size = sizeof peer;
-	if(getpeername(fd, (sockaddr *)&peer, &size) != 0)
-		return;
-	entry probe(peer);
-	ptrlist<entry>::iterator p = data.find(probe);
+	entry e(ip);
+	ptrlist<entry>::iterator p = data.find(e);
+
+
 	if(p && --p->count <= 0)
 		data.removeLink(p);
+
 	calcCount();
 }
+
 
 void ign::calcCount()
 {
