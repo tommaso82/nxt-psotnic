@@ -1,0 +1,32 @@
+name: Baseline: unmodified gay-psotnic IPv6
+on:
+  push:
+    branches:
+      - test/upstream-native-ipv6-baseline
+  workflow_dispatch:
+
+jobs:
+  upstream-botnet-ipv6:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout test harness from isolated branch
+        uses: actions/checkout@v4
+      - name: Checkout untouched gay-psotnic at known upstream commit
+        uses: actions/checkout@v4
+        with:
+          repository: psotnic/gay-psotnic
+          ref: 2bd6db1ecd84bc8f2ae90aae58de5ee3fe0263c2
+          path: classic
+          persist-credentials: false
+      - name: Install original build dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential perl libssl-dev
+      - name: Compile original sources without patches
+        run: |
+          test "$(git -C classic rev-parse HEAD)" = "2bd6db1ecd84bc8f2ae90aae58de5ee3fe0263c2"
+          cd classic
+          perl configure --disable-modules
+          make debug
+          test -x bin/psotnic
+      - name: Real baseline MAIN/LEAF IPv4 IPv6 and IP filtering
+        run: python3 tests/test-upstream-botnet-ipv6-baseline.py classic/bin/psotnic
