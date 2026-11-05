@@ -186,8 +186,10 @@ void parse_bot(inetconn *c, char *data)
 
 						break;
 					}
-					if(!h->ip || (peer.ss_family == AF_INET && ((sockaddr_in &)peer).sin_addr.s_addr == h->ip)
-					   || (h->addr->data.entries() && h->addr->match(c->getPeerIpName())))
+					const bool has_addresses = h->addr->data.entries() != 0;
+					if((!h->ip && !has_addresses)
+					   || (peer.ss_family == AF_INET && h->ip && ((sockaddr_in &)peer).sin_addr.s_addr == h->ip)
+					   || (has_addresses && h->addr->match(c->getPeerIpName())))
 					{
    						if(MD5HexValidate(arg[1], c->tmpstr, strlen(c->tmpstr), h->pass, 16))
 						{
