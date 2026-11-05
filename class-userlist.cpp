@@ -1535,12 +1535,8 @@ bool ul::isBot(unsigned int ip)
 
 bool ul::isBotByFD(int fd)
 {
-	inetconn *c=new inetconn;
-	bool ret;
-	c->fd=fd;
-	ret=isBotByAddr(c->getPeerPortName());
-	free(c);
-	return ret;
+	const char *ip = getipstr(fd, getIpVersion(fd), getpeername);
+	return ip && isBotByAddr(ip);
 }
 
 /* missing.

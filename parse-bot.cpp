@@ -107,7 +107,7 @@ void parse_bot(inetconn *c, char *data)
 								emulateIRCDIntro(c);
 								c->status |= STATUS_IRCCLIENT;
 								sendLogo(c);
-								ignore.removeHit(c->getPeerIp4());
+								ignore.removeHit(c->fd);
 								return;
 							}
 							else
@@ -144,7 +144,7 @@ void parse_bot(inetconn *c, char *data)
 			{
 				if(strlen(arg[1]))
 				{
-					struct sockaddr_in peer;
+					sockaddr_storage peer;
 					HANDLE *h = userlist.findHandle(arg[0]);
 
 					if(h && net.findConn(h))
@@ -165,8 +165,11 @@ void parse_bot(inetconn *c, char *data)
 						break;
 					}
 
-					socklen_t peersize = sizeof(struct sockaddr_in);
-					getpeername(c->fd, (sockaddr *) &peer, &peersize);
+					socklen_t peersize = sizeof peer;
+					if(getpeername(c->fd, (sockaddr *)&peer, &peersize) != 0) {
+						reason = push(NULL, "cannot identify botip", NULL);
+						break;
+					}
 
 					if(!h)
 					{
@@ -183,7 +186,8 @@ void parse_bot(inetconn *c, char *data)
 
 						break;
 					}
-					if(!h->ip || peer.sin_addr.s_addr == h->ip || (h->addr->data.entries() && h->addr->match(c->getPeerIpName())))
+					if(!h->ip || (peer.ss_family == AF_INET && ((sockaddr_in &)peer).sin_addr.s_addr == h->ip)
+					   || (h->addr->data.entries() && h->addr->match(c->getPeerIpName())))
 					{
    						if(MD5HexValidate(arg[1], c->tmpstr, strlen(c->tmpstr), h->pass, 16))
 						{
@@ -260,7 +264,7 @@ void parse_bot(inetconn *c, char *data)
 					if(config.bottype == BOT_MAIN)
 						c->send("%s *", S_CHKHOST);
 
-					ignore.removeHit(c->getPeerIp4());
+					ignore.removeHit(c->fd);
 					return;
 				}
 
