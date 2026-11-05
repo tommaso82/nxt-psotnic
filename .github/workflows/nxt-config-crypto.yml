@@ -160,6 +160,7 @@ jobs:
           ./bin/psotnic -h | grep -q 'Legacy decrypted-config debug flag'
           python3 tests/test-nxt-debug-foreground.py ./bin/psotnic
           python3 tests/test-nxt-botnet-ipv6.py ./bin/psotnic
+          python3 tests/test-nxt-botnet-ipv6.py ./bin/psotnic --negative
 
   bot-build:
     runs-on: ubuntu-24.04
