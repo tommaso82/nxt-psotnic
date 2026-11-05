@@ -40,7 +40,7 @@ def exercise(family, host):
         (folder / "main.ul").write_text(
             "13 leafbot 1 1 0.0.0.0 integration\n"
             "19 leafbot +l\n"
-            f"30 leafbot {hashlib.md5(PASSWORD.encode()).hexdigest()}\n"
+            f"30 leafbot {hashlib.md5(PASSWORD.encode().ljust(64, b'\x00')).hexdigest()}\n"
             f"80 leafbot {host}\n"
             "21 42\n82 1700000000\n"
         )
