@@ -14,6 +14,9 @@ on:
       - 'class-options.cpp'
       - 'class-userlist.cpp'
       - 'functions.cpp'
+      - 'parse-bot.cpp'
+      - 'class-ignore.cpp'
+      - 'tests/test-nxt-botnet-ipv6.py'
       - '.github/workflows/nxt-optional-crypto.yml'
   workflow_dispatch:
 
@@ -38,6 +41,8 @@ jobs:
           ./bin/psotnic config --help | grep -q 'NXTCRYPT: disabled'
           if ./bin/psotnic config encrypt foo --output bar; then exit 1; fi
           python3 tests/test-nxt-proxy-integration.py ./bin/psotnic
+      - name: Real IPv4 and IPv6 MAIN/LEAF linking (plaintext)
+        run: python3 tests/test-nxt-botnet-ipv6.py ./bin/psotnic
   plaintext-freebsd:
     runs-on: ubuntu-24.04
     steps:
@@ -47,9 +52,10 @@ jobs:
         with:
           release: '14.5'
           prepare: |
-            pkg install -y perl5 gcc
+            pkg install -y perl5 gcc python3
           run: |
             perl configure --disable-nxtcrypt --disable-modules
             make dynamic
             test -x bin/psotnic
             ./bin/psotnic --help | grep -q 'NXTCRYPT: disabled'
+            python3 tests/test-nxt-botnet-ipv6.py ./bin/psotnic
