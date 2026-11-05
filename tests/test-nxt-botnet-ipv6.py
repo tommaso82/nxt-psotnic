@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """End-to-end IPv4/IPv6 MAIN-LEAF botnet authentication on real sockets."""
 import hashlib
+import shutil
 import socket
 import subprocess
 import sys
@@ -9,6 +10,7 @@ import time
 from pathlib import Path
 
 BIN = str(Path(sys.argv[1]).resolve())
+COMMAND = ([shutil.which('stdbuf'), '-oL', '-eL'] if shutil.which('stdbuf') else []) + [BIN]
 PASSWORD = "nxt-ipv6-botnet-test-secret"
 
 
@@ -55,13 +57,13 @@ def exercise(family, host):
             f"hub {host} {port} {PASSWORD} mainhub\n"
         )
         with (folder / "main.log").open("wb") as main_log, (folder / "leaf.log").open("wb") as leaf_log:
-            main = subprocess.Popen([BIN, "-d", "main.cfg"], cwd=folder,
+            main = subprocess.Popen(COMMAND + ["-d", "main.cfg"], cwd=folder,
                                     stdin=subprocess.DEVNULL, stdout=main_log,
                                     stderr=subprocess.STDOUT)
             leaf = None
             try:
                 wait_for_listener(family, host, port, main)
-                leaf = subprocess.Popen([BIN, "-d", "leaf.cfg"], cwd=folder,
+                leaf = subprocess.Popen(COMMAND + ["-d", "leaf.cfg"], cwd=folder,
                                        stdin=subprocess.DEVNULL, stdout=leaf_log,
                                        stderr=subprocess.STDOUT)
                 until = time.monotonic() + 15
@@ -80,6 +82,9 @@ def exercise(family, host):
                 print(f"BOTNET_LINK_OK family={'IPv6' if family == socket.AF_INET6 else 'IPv4'}"
                       f" listener=bots peer={host} userlist_transferred=yes", flush=True)
             except BaseException:
+                if shutil.which("ss"):
+                    print("--- sockets ---", flush=True)
+                    subprocess.run(["ss", "-tanp"], check=False)
                 for name in ("main", "leaf"):
                     log = folder / (name + ".log")
                     if log.exists():

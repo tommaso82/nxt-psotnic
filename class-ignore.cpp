@@ -75,7 +75,7 @@ ign::entry *ign::hit(const sockaddr_storage &peer)
 				src = &((const sockaddr_in6 &)peer).sin6_addr;
 			}
 #endif
-			net.send(HAS_N, "\\002Ignoring %s for %d seconds\\002",
+			net.send(HAS_N, "\002Ignoring %s for %d seconds\002",
 			         inet_ntop(family, src, addr, sizeof addr), (int)set.PERIP_IGNORE_TIME);
 		}
 	}

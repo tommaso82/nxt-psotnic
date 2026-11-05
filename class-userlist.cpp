@@ -1552,7 +1552,7 @@ bool ul::isBotByAddr(const char *ip)
 	{
 		if(isBot(h))
 		{
-			if(h->addr->match(ip))
+			if(h->addr->data.entries() && h->addr->match(ip))
 				return true;
 		}
 	}
