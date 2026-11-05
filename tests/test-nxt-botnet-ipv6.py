@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """End-to-end IPv4/IPv6 MAIN-LEAF botnet authentication on real sockets."""
-import hashlib
 import shutil
 import socket
 import subprocess
@@ -12,6 +11,8 @@ from pathlib import Path
 BIN = str(Path(sys.argv[1]).resolve())
 COMMAND = ([shutil.which('stdbuf'), '-oL', '-eL'] if shutil.which('stdbuf') else []) + [BIN]
 PASSWORD = "nxt-ipv6-botnet-test-secret"
+# Psotnic uses a modified MD5 IV, not hashlib.md5 (RFC 1321).
+PASSWORD_DIGEST = "ca61d593021ab048776dc28a37177b01"
 
 
 def wait_for_listener(family, host, port, process):
@@ -40,7 +41,7 @@ def exercise(family, host):
         (folder / "main.ul").write_text(
             "13 leafbot 1 1 0.0.0.0 integration\n"
             "19 leafbot +l\n"
-            f"30 leafbot {hashlib.md5(PASSWORD.encode().ljust(64, b'\x00')).hexdigest()}\n"
+            f"30 leafbot {PASSWORD_DIGEST}\n"
             f"80 leafbot {host}\n"
             "21 42\n82 1700000000\n"
         )
