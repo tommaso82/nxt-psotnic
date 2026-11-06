@@ -3,30 +3,15 @@
 #include <cstring>
 #include <cstdlib>
 #include <cstdio>
-#include <fstream>
 #include <stdexcept>
 
 namespace nxtcrypto {
 namespace {
-bool has_magic(const char *path,const char *magic) {
-    std::ifstream f(path,std::ios::binary);
-    char head[8];
-    return bool(f.read(head,sizeof(head))) && memcmp(head,magic,sizeof(head))==0;
-}
 void unavailable() {
     fputs("[-] NXTCRYPT support is disabled in this build\n",stderr);
     std::exit(1);
 }
 void fail() { throw std::runtime_error("NXTCRYPT support is disabled in this build"); }
-}
-bool is_nxt_file(const char *path) { return has_magic(path,"NXTCRYPT"); }
-bool is_legacy_file(const char *path) { return has_magic(path,"psotnic\0"); }
-void plaintext_guard(const char *path,const char *what) {
-    const std::size_t len=strlen(path);
-    if(len>=4 && strcmp(path+len-4,".nxt")==0)
-        throw std::runtime_error(std::string("refusing to write plaintext ")+what+" into .nxt");
-    if(is_nxt_file(path) || is_legacy_file(path))
-        throw std::runtime_error(std::string("refusing to overwrite an encrypted ")+what+" with plaintext");
 }
 void begin_bootstrap() {}
 void finish_bootstrap() {}

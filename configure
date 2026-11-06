@@ -53,6 +53,7 @@ $targets{'dynamic'} = '-Os -Wall -Wno-non-virtual-dtor';
 $targets{'debug'} = '-DHAVE_DEBUG -g -fno-inline -pedantic -Wall -Wno-long-long -Wformat=2 -Wunused -Wno-non-virtual-dtor';
 
 my $filelist = "
+nxt-file.o
 nxt-crypto.o
 nxt-legacy.o
 nxt-proxy.o
@@ -110,6 +111,7 @@ signals.o
 scram.o";
 
 my $headerlist = "
+nxt-file.h
 nxt-crypto.h
 nxt-legacy.h
 nxt-proxy.h
@@ -181,6 +183,22 @@ if($disable_nxtcrypt)
 else
 {
 	print "[+] Enabling NXTCRYPT\n";
+}
+
+# The original Makefiles don't track compiler flag changes. Switching
+# crypto modes must rebuild all objects, not reuse incompatible ones.
+if(-f 'Makefile.dynamic') {
+    open(my $previous, '<', 'Makefile.dynamic') or die "[-] Cannot read Makefile.dynamic: $!\n";
+    local $/;
+    my $old = <$previous>;
+    close($previous);
+    my $was_disabled = $old =~ /-DNXTCRYPT_DISABLED\b/ ? 1 : 0;
+    if($was_disabled != !!$disable_nxtcrypt) {
+        my @objects = glob('*.o');
+        my $removed = unlink @objects;
+        die "[-] Cannot remove stale build objects\n" if $removed != @objects;
+        print "[*] NXTCRYPT mode changed; recompiling objects\n";
+    }
 }
 
 if($antiptrace)
