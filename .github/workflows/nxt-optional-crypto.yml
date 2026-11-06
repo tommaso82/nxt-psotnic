@@ -60,6 +60,11 @@ jobs:
           ./bin/psotnic config import "$tmp/old.cfg" --binary /tmp/nxt-plain-legacy-fixture --preview > "$tmp/preview.cfg"
           cmp "$tmp/expected.cfg" "$tmp/preview.cfg"
           test "$(stat -c %a "$tmp/imported.cfg")" = 600
+          g++ -std=c++11 -O2 -I. class-blowfish.cpp tests/classic-upstream-fixture.cpp -o /tmp/nxt-plain-legacy-ul-fixture
+          /tmp/nxt-plain-legacy-ul-fixture "$tmp/old.ul" ul
+          printf '# classic userlist\n21 42\n82 1700000000\n' > "$tmp/expected.ul"
+          ./bin/psotnic userlist import "$tmp/old.ul" --seed-file seed.h --output "$tmp/imported.ul"
+          cmp "$tmp/expected.ul" "$tmp/imported.ul"
           if ./bin/psotnic config import "$tmp/old.cfg" --seed-file tests/fixtures/legacy-seed.h --output "$tmp/reject.NXT" > "$tmp/reject.log" 2>&1; then exit 1; fi
           grep -q 'not compiled in' "$tmp/reject.log"
           test ! -e "$tmp/reject.NXT"
