@@ -178,7 +178,6 @@ if($disable_nxtcrypt)
 	print "[-] Disabling NXTCRYPT (libsodium not required)\n";
 	$cflags .= "-DNXTCRYPT_DISABLED ";
 	$filelist =~ s/nxt-crypto\.o/nxt-crypto-disabled.o/;
-	$filelist =~ s/nxt-legacy\.o//;
 }
 else
 {

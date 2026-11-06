@@ -21,6 +21,7 @@
 #include "prots.h"
 #include "global-var.h"
 #include "nxt-crypto.h"
+#include "nxt-legacy.h"
 #include <sstream>
 #include <unistd.h>  // isatty(STDOUT_FILENO)
 
@@ -362,8 +363,11 @@ static void print_nxt_short_help(const char *exe)
 static void print_nxt_config_help(const char *exe, bool userlist)
 {
 #ifdef NXTCRYPT_DISABLED
-    (void)exe; (void)userlist;
-    puts("NXTCRYPT: disabled at build time (file crypto and legacy import unavailable).");
+    const char *section = userlist ? "userlist" : "config";
+    puts("NXTCRYPT: disabled at build time (legacy Blowfish import available).");
+    printf("  %s %s import OLD_FILE --binary OLD_PSOTNIC --output NEW_FILE\n",exe,section);
+    puts("      Use --seed-file SEED_H instead of --binary when available.");
+    puts("      Import creates plaintext files; --to nxt requires NXTCRYPT.");
     return;
 #else
     const char *section = userlist ? "userlist" : "config";
@@ -406,7 +410,9 @@ static void print_nxt_help(const char *exe)
     printf("  %s -n                          Interactive new-config wizard\n",exe);
     printf("  %s -ne                         Expert configuration wizard\n",exe);
 #ifdef NXTCRYPT_DISABLED
-    puts("  NXTCRYPT: disabled at build time (plaintext files only)");
+    puts("  NXTCRYPT: disabled at build time (legacy import available)");
+    printf("  %s config import ...              Import classic config\n",exe);
+    printf("  %s userlist import ...            Import classic userlist\n",exe);
 #else
     printf("  %s config COMMAND ...         Config crypto / legacy migration\n",exe);
     printf("  %s userlist COMMAND ...       Userlist crypto / legacy migration\n",exe);
@@ -487,13 +493,17 @@ void parse_cmdline(int argc, char *argv[])
 	if(argc > 1 && !strcmp(argv[1], "config"))
 	{
         nxtcrypto::finish_bootstrap();
-		int status = nxtcrypto::config_command(argc, argv);
+        const int status = argc>2 && !strcmp(argv[2],"import")
+            ? nxtlegacy::import_command(argc,argv)
+            : nxtcrypto::config_command(argc,argv);
 		::exit(status);
 	}
 	if(argc > 1 && !strcmp(argv[1], "userlist"))
 	{
         nxtcrypto::finish_bootstrap();
-		int status = nxtcrypto::userlist_command(argc, argv);
+        const int status = argc>2 && !strcmp(argv[2],"import")
+            ? nxtlegacy::import_userlist_command(argc,argv)
+            : nxtcrypto::userlist_command(argc,argv);
 		::exit(status);
 	}
 	int i;
@@ -555,6 +565,15 @@ void parse_cmdline(int argc, char *argv[])
 			exit(0);
 		}
 
+#ifdef NXTCRYPT_DISABLED
+        else if(!strcmp(argv[i], "--key-cache") ||
+                !strcmp(argv[i], "--password") ||
+                !strcmp(argv[i], "--password-file") ||
+                !strcmp(argv[i], "--password-stdin")) {
+            fprintf(stderr,"[-] NXTCRYPT support was not compiled in: %s\n",argv[i]);
+            ::exit(1);
+        }
+#else
 		else if(!strcmp(argv[i], "--password") && i+1 < argc)
 		{
 			++i;
@@ -567,6 +586,7 @@ void parse_cmdline(int argc, char *argv[])
 			nxtcrypto::set_password_stdin();
         else if(!strcmp(argv[i], "--key-cache"))
             nxtcrypto::enable_key_cache();
+#endif
 		else if(!strcmp(argv[i], "-n"))
 			createInitialConfig();
 

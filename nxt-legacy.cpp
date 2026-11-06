@@ -1,9 +1,12 @@
 // Legacy gay-psotnic configuration importer (version 3).
 // Decodes old per-line Blowfish blocks. Never executes supplied binaries.
 #include "prots.h"
-#include "nxt-crypto.h"
 #include "nxt-legacy.h"
+#include "nxt-file.h"
+#ifndef NXTCRYPT_DISABLED
+#include "nxt-crypto.h"
 #include <sodium.h>
+#endif
 #include <elf.h>
 #include <vector>
 #include <string>
@@ -33,12 +36,20 @@ std::vector<unsigned char> read_bytes(const char *path, size_t maximum) {
         throw std::runtime_error("input read failed");
     return data;
 }
+void erase_bytes(void *data, size_t size) {
+#ifndef NXTCRYPT_DISABLED
+    sodium_memzero(data,size);
+#else
+    volatile unsigned char *p=static_cast<volatile unsigned char*>(data);
+    while(size--) *p++=0;
+#endif
+}
 void erase(std::vector<unsigned char>& x) {
-    if(!x.empty()) sodium_memzero(x.data(),x.size());
+    if(!x.empty()) erase_bytes(x.data(),x.size());
     x.clear();
 }
 void erase(std::string &x) {
-    if(!x.empty()) sodium_memzero(&x[0],x.size());
+    if(!x.empty()) erase_bytes(&x[0],x.size());
     x.clear();
 }
 typedef std::vector<unsigned char> Bytes;
@@ -119,7 +130,7 @@ bool decrypt_with_seed(const Bytes &encrypted, const Bytes &seed, std::string& o
     CBlowFish cipher;
     unsigned char key[16];memcpy(key,seed.data(),16);
     cipher.Initialize(key,16);
-    sodium_memzero(key,sizeof key);
+    erase_bytes(key,sizeof key);
     Bytes plain(encrypted.size()-12);
     cipher.Decode(const_cast<unsigned char*>(encrypted.data()+12),plain.data(),(DWORD)plain.size());
     std::string text;
@@ -289,35 +300,64 @@ std::string legacy_decrypt(const char *file,const char *seed_file,const char *bi
 int import_common(int argc,char **argv,bool userlist) {
     if(argc<4) {fprintf(stderr,"Usage: psotnic config|userlist import OLD.cfg (--seed-file seed.h | --binary old-psotnic) [--preview | --output NEW.cfg --to plain|nxt]\n");return 1;}
     const char *seed_file=NULL, *binary=NULL, *output=NULL;
-    std::string mode="plain";bool preview=false;
+    std::string mode="plain";bool preview=false,to_specified=false;
+#ifndef NXTCRYPT_DISABLED
+    bool password_option=false;
+#endif
     try {
         for(int i=4;i<argc;++i) {
             if(!strcmp(argv[i],"--seed-file") && i+1<argc) seed_file=argv[++i];
             else if(!strcmp(argv[i],"--binary") && i+1<argc) binary=argv[++i];
             else if(!strcmp(argv[i],"--output") && i+1<argc) output=argv[++i];
-            else if(!strcmp(argv[i],"--to") && i+1<argc) mode=argv[++i];
+            else if(!strcmp(argv[i],"--to") && i+1<argc) {mode=argv[++i];to_specified=true;}
             else if(!strcmp(argv[i],"--preview")) preview=true;
+#ifndef NXTCRYPT_DISABLED
             else if(!strcmp(argv[i],"--password") && i+1<argc) {
-                ++i;nxtcrypto::set_password_argument(argv[i]);sodium_memzero(argv[i],strlen(argv[i]));
-            } else if(!strcmp(argv[i],"--password-file") && i+1<argc) nxtcrypto::set_password_file(argv[++i]);
-            else if(!strcmp(argv[i],"--password-stdin")) nxtcrypto::set_password_stdin();
+                ++i;password_option=true;nxtcrypto::set_password_argument(argv[i]);erase_bytes(argv[i],strlen(argv[i]));
+            } else if(!strcmp(argv[i],"--password-file") && i+1<argc) {
+                password_option=true;nxtcrypto::set_password_file(argv[++i]);
+            } else if(!strcmp(argv[i],"--password-stdin")) {
+                password_option=true;nxtcrypto::set_password_stdin();
+            }
+#else
+            else if(!strcmp(argv[i],"--password") ||
+                    !strcmp(argv[i],"--password-file") ||
+                    !strcmp(argv[i],"--password-stdin"))
+                throw std::runtime_error("password options require NXTCRYPT (build without --disable-nxtcrypt)");
+#endif
             else throw std::runtime_error(std::string("unknown import option: ")+argv[i]);
         }
         if(mode!="plain" && mode!="nxt") throw std::runtime_error("--to must be plain or nxt");
-        if(preview && output) throw std::runtime_error("preview cannot write an output file");
+        if(preview && output) throw std::runtime_error("--preview cannot be combined with --output");
+        if(preview && to_specified) throw std::runtime_error("--to cannot be used with --preview");
         if(!preview && !output) throw std::runtime_error("--output is required unless --preview");
         if(!seed_file && !binary) throw std::runtime_error("missing --seed-file or --binary");
+        std::string target=output ? output : "";
+        const bool nxt_extension=nxtfile::has_nxt_extension(target.c_str());
+        if(!preview && !to_specified && nxt_extension) mode="nxt";
+        if(!preview && mode=="plain" && nxt_extension)
+            throw std::runtime_error(".nxt is reserved for encrypted files");
+        if(!preview && mode=="nxt" && !nxt_extension) target+=".nxt";
+#ifndef NXTCRYPT_DISABLED
+        if(password_option && mode!="nxt")
+            throw std::runtime_error("password options require encrypted output (--to nxt)");
+#endif
+#ifdef NXTCRYPT_DISABLED
+        if(mode=="nxt") throw std::runtime_error("NXTCRYPT support was not compiled in");
+#endif
         std::string plain=legacy_decrypt_as(argv[3],seed_file,binary,userlist);
         try {
             if(preview) {
                 if(fwrite(plain.data(),1,plain.size(),stdout)!=plain.size())
                     throw std::runtime_error("failed to write preview");
             } else if(mode=="plain") {
-                save_plain(output,plain);
-                printf("[+] Legacy config imported as plaintext: %s\n",output);
+                save_plain(target.c_str(),plain);
+                printf("[+] Legacy %s imported as plaintext: %s\n",userlist?"userlist":"config",target.c_str());
+#ifndef NXTCRYPT_DISABLED
             } else {
-                nxtcrypto::encrypt_plaintext_to_file(plain,output);
-                printf("[+] Legacy config imported directly to NXTCRYPT: %s\n",output);
+                nxtcrypto::encrypt_plaintext_to_file(plain,target.c_str());
+                printf("[+] Legacy %s imported to NXTCRYPT: %s\n",userlist?"userlist":"config",target.c_str());
+#endif
             }
             erase(plain);
         } catch(...) {erase(plain);throw;}
