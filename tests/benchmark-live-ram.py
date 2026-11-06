@@ -113,8 +113,12 @@ def one(label,roundno,profile):
             ul.write_text("# userlist\n21 42\n82 1700000000\n")
             if label.startswith("classic"):
                 legacy_ul=folder/"bot-legacy.ul"
-                subprocess.run([binary["classic_encrypt"],str(ul),str(legacy_ul),"ul"],
-                               check=True,capture_output=True,timeout=10)
+                # The existing classic-upstream-fixture helper generates the
+                # same fixed userlist without accepting an input filename.
+                cmd=([binary["classic_encrypt"],str(legacy_ul),"ul"]
+                     if args.classic_vs_minimal else
+                     [binary["classic_encrypt"],str(ul),str(legacy_ul),"ul"])
+                subprocess.run(cmd,check=True,capture_output=True,timeout=10)
                 legacy_ul.replace(ul)
             elif label=="nxt-crypt":
                 encrypted_ul=folder/"bot.ul.nxt"
