@@ -4,7 +4,7 @@ use strict;
 use FileHandle;
 use Getopt::Long;
 
-our ($antiptrace, $noircbacktrace, $ssl, $disable_ssl, $disable_modules, $little_endian, $big_endian, $cc_prefix, $cc_options, $ld_options, $disable_adns, $firedns, $prefix, $bindir, $includesdir, $modulesdir, $confdir, $help);
+our ($antiptrace, $noircbacktrace, $ssl, $disable_ssl, $disable_modules, $disable_nxtcrypt, $little_endian, $big_endian, $cc_prefix, $cc_options, $ld_options, $disable_adns, $firedns, $prefix, $bindir, $includesdir, $modulesdir, $confdir, $help);
 
 if(!GetOptions(
 	"--with-antiptrace" => \$antiptrace,
@@ -19,6 +19,7 @@ if(!GetOptions(
 	"--disable-ssl" => \$disable_ssl,
 	"--with-firedns" => \$firedns,
 	"--disable-modules" => \$disable_modules,
+	"--disable-nxtcrypt" => \$disable_nxtcrypt,
 	"--prefix:s" => \$prefix,
 	"--help" => \$help))
 {
@@ -41,6 +42,7 @@ if($help)
 	print "  --disable-ssl     \tDisable SSL support\n";
 	print "  --with-firedns    \tEnable the FireDNS resolver\n";
 	print "  --disable-modules \tDisable module support\n";
+	print "  --disable-nxtcrypt\tBuild without NXTCRYPT / libsodium\n";
 	print "  --prefix          \tPrefix for the installation and search paths            [".$ENV{'HOME'} . "/gay-psotnic]\n";
 	exit;
 }
@@ -51,6 +53,7 @@ $targets{'dynamic'} = '-Os -Wall -Wno-non-virtual-dtor';
 $targets{'debug'} = '-DHAVE_DEBUG -g -fno-inline -pedantic -Wall -Wno-long-long -Wformat=2 -Wunused -Wno-non-virtual-dtor';
 
 my $filelist = "
+nxt-file.o
 nxt-crypto.o
 nxt-legacy.o
 nxt-proxy.o
@@ -108,6 +111,7 @@ signals.o
 scram.o";
 
 my $headerlist = "
+nxt-file.h
 nxt-crypto.h
 nxt-legacy.h
 nxt-proxy.h
@@ -168,6 +172,33 @@ print "[*] Operating system: $os\n";
 my ($cflags, $lflags) = getGccOptions();
 
 chdir('..');
+
+if($disable_nxtcrypt)
+{
+	print "[-] Disabling NXTCRYPT (libsodium not required)\n";
+	$cflags .= "-DNXTCRYPT_DISABLED ";
+	$filelist =~ s/nxt-crypto\.o/nxt-crypto-disabled.o/;
+}
+else
+{
+	print "[+] Enabling NXTCRYPT\n";
+}
+
+# The original Makefiles don't track compiler flag changes. Switching
+# crypto modes must rebuild all objects, not reuse incompatible ones.
+if(-f 'Makefile.dynamic') {
+    open(my $previous, '<', 'Makefile.dynamic') or die "[-] Cannot read Makefile.dynamic: $!\n";
+    local $/;
+    my $old = <$previous>;
+    close($previous);
+    my $was_disabled = $old =~ /-DNXTCRYPT_DISABLED\b/ ? 1 : 0;
+    if($was_disabled != !!$disable_nxtcrypt) {
+        my @objects = glob('*.o');
+        my $removed = unlink @objects;
+        die "[-] Cannot remove stale build objects\n" if $removed != @objects;
+        print "[*] NXTCRYPT mode changed; recompiling objects\n";
+    }
+}
 
 if($antiptrace)
 {

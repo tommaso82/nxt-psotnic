@@ -24,7 +24,6 @@
 #include "nxt-proxy.h"
 #include <string>
 #include <stdexcept>
-#include <sodium.h>
 
 void CONFIG::load(const char *file, bool decrypted)
 {
@@ -128,7 +127,7 @@ void CONFIG::load(const char *file, bool decrypted)
             if(!alt[i].isDefault())resolve_direct(alt[i].getHost());
     }
 #endif
-	if(encrypted && !plaintext.empty()) sodium_memzero(&plaintext[0], plaintext.size());
+	if(encrypted && !plaintext.empty()) nxtcrypto::secure_zero(&plaintext[0], plaintext.size());
 
 	/* Basic checks */
 	if(!nick.getLen())

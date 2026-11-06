@@ -34,6 +34,8 @@ on:
       - 'configure'
       - 'tests/test.pm'
       - 'tests/sodium.c'
+      - 'nxt-file.cpp'
+      - 'nxt-file.h'
       - 'tests/test-nxt-crypto.sh'
       - 'tests/nxt-crypto-cli-test.cpp'
       - 'tests/cfg-session-test.cpp'
@@ -50,9 +52,9 @@ jobs:
         run: perl configure --disable-modules
       - name: Build standalone crypto CLI and fixture executables
         run: |
-          g++ -std=c++11 -O2 -Wall -Wextra -I. nxt-crypto.cpp nxt-legacy.cpp class-blowfish.cpp tests/nxt-crypto-cli-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-crypto-test
-          g++ -std=c++11 -O2 -Wall -Wextra -I. nxt-crypto.cpp nxt-legacy.cpp class-blowfish.cpp tests/cfg-session-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-cfg-session-test
-          g++ -std=c++11 -O2 -Wall -Wextra -I. nxt-crypto.cpp nxt-legacy.cpp class-blowfish.cpp tests/userlist-bootstrap-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-ul-bootstrap-test
+          g++ -std=c++11 -O2 -Wall -Wextra -I. nxt-crypto.cpp nxt-file.cpp nxt-legacy.cpp class-blowfish.cpp tests/nxt-crypto-cli-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-crypto-test
+          g++ -std=c++11 -O2 -Wall -Wextra -I. nxt-crypto.cpp nxt-file.cpp nxt-legacy.cpp class-blowfish.cpp tests/cfg-session-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-cfg-session-test
+          g++ -std=c++11 -O2 -Wall -Wextra -I. nxt-crypto.cpp nxt-file.cpp nxt-legacy.cpp class-blowfish.cpp tests/userlist-bootstrap-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-ul-bootstrap-test
           for opt in 0 1 2; do
             g++ -std=c++11 -O"$opt" -I. class-blowfish.cpp tests/legacy-fixture.cpp -o "/tmp/old-psotnic-$opt"
           done
@@ -62,7 +64,7 @@ jobs:
         run: sh tests/test-nxt-cfg-session.sh /tmp/nxt-crypto-test /tmp/nxt-cfg-session-test
       - name: Verify local key cache, randomized states and password-only CLI
         run: |
-          g++ -std=c++11 -O2 -Wall -Wextra -I. nxt-crypto.cpp nxt-legacy.cpp class-blowfish.cpp tests/key-cache-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-key-cache-test
+          g++ -std=c++11 -O2 -Wall -Wextra -I. nxt-crypto.cpp nxt-file.cpp nxt-legacy.cpp class-blowfish.cpp tests/key-cache-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-key-cache-test
           dir="$(mktemp -d)"
           trap 'rm -rf "$dir"' EXIT
           printf 'nick testbot\n' > "$dir/plain"
@@ -275,6 +277,6 @@ jobs:
           perl configure --disable-modules
           make dynamic
           g++ -std=c++11 -O0 -Iclassic classic/class-blowfish.cpp tests/classic-upstream-fixture.cpp -o /tmp/classic-upstream-fixture
-          g++ -std=c++11 -O2 -I. nxt-crypto.cpp nxt-legacy.cpp class-blowfish.cpp tests/ul-session-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-ul-session-test
+          g++ -std=c++11 -O2 -I. nxt-crypto.cpp nxt-file.cpp nxt-legacy.cpp class-blowfish.cpp tests/ul-session-test.cpp $(pkg-config --cflags --libs libsodium) -o /tmp/nxt-ul-session-test
       - name: Extract cfg seed from actual unstripped and stripped original psotnic binaries
         run: sh tests/test-classic-upstream.sh ./bin/psotnic classic/bin/psotnic /tmp/classic-upstream-fixture

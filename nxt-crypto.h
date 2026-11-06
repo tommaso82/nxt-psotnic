@@ -1,10 +1,24 @@
 #ifndef NXT_PSOTNIC_CRYPTO_H
 #define NXT_PSOTNIC_CRYPTO_H
 #include <string>
+#include <cstddef>
+#include "nxt-file.h"
+#ifndef NXTCRYPT_DISABLED
+#include <sodium.h>
+#endif
 namespace nxtcrypto {
-bool is_nxt_file(const char *path);
-bool is_legacy_file(const char *path);
-void plaintext_guard(const char *path,const char *what);
+// Keep sensitive plaintext scrubbing available without a libsodium dependency.
+inline void secure_zero(void *buf, std::size_t n) {
+#ifdef NXTCRYPT_DISABLED
+    volatile unsigned char *p=static_cast<volatile unsigned char*>(buf);
+    while(n--) *p++=0;
+#else
+    sodium_memzero(buf,n);
+#endif
+}
+using nxtfile::is_nxt_file;
+using nxtfile::is_legacy_file;
+using nxtfile::plaintext_guard;
 void set_password_argument(const char *password);
 void set_password_file(const char *path);
 void set_password_stdin();

@@ -21,7 +21,6 @@
 #include "prots.h"
 #include "global-var.h"
 #include "nxt-crypto.h"
-#include <sodium.h>
 #include <string>
 #include <stdexcept>
 
@@ -585,11 +584,11 @@ options::event *CONFIG::save(bool decrypted)
         }
     } catch(const std::exception& e) {
         conf.capture=NULL;
-        if(!plain.empty()) sodium_memzero(&plain[0],plain.size());
+        if(!plain.empty()) nxtcrypto::secure_zero(&plain[0],plain.size());
         _event.setError(NULL,"cannot save config '%s/%s': %s",cwd,(const char *)file,e.what());
         return &_event;
     }
-    if(!plain.empty()) sodium_memzero(&plain[0],plain.size());
+    if(!plain.empty()) nxtcrypto::secure_zero(&plain[0],plain.size());
     if(encrypted)
         _event.setOk(NULL,"config file has been saved (NXT encrypted)");
     else

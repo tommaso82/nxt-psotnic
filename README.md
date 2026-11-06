@@ -16,7 +16,7 @@ perl configure --disable-modules
 make dynamic
 ```
 
-The executable is built at `bin/psotnic`.
+The executable is built at `bin/psotnic`. To compile without libsodium or NXTCRYPT support, pass `--disable-nxtcrypt` to `perl configure`. This builds a plaintext-only bot: NXTCRYPT encrypt/decrypt commands are disabled, but classic Blowfish config/userlist imports to plaintext remain available.
 
 ## Getting started
 

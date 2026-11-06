@@ -21,7 +21,7 @@
 #include "prots.h"
 #include "global-var.h"
 #include "nxt-crypto.h"
-#include <sodium.h>
+#include "nxt-legacy.h"
 #include <sstream>
 #include <unistd.h>  // isatty(STDOUT_FILENO)
 
@@ -352,12 +352,24 @@ static void print_nxt_short_help(const char *exe)
     puts("Quick start:");
     printf("  %s -n                   Create a new bot configuration\n", exe);
     printf("  %s bot.cfg              Start the bot with an existing config\n", exe);
+#ifdef NXTCRYPT_DISABLED
+    printf("  %s -h                   Full guide (options, proxy)\n", exe);
+#else
     printf("  %s -h                   Full guide (options, proxy, encryption)\n", exe);
+#endif
     puts("\nMore: config --help | userlist --help | --version");
 }
 
 static void print_nxt_config_help(const char *exe, bool userlist)
 {
+#ifdef NXTCRYPT_DISABLED
+    const char *section = userlist ? "userlist" : "config";
+    puts("NXTCRYPT: disabled at build time (legacy Blowfish import available).");
+    printf("  %s %s import OLD_FILE --binary OLD_PSOTNIC --output NEW_FILE\n",exe,section);
+    puts("      Use --seed-file SEED_H instead of --binary when available.");
+    puts("      Import creates plaintext files; --to nxt requires NXTCRYPT.");
+    return;
+#else
     const char *section = userlist ? "userlist" : "config";
     printf("NXT-Psotnic - %s commands\n\n", userlist ? "userlist" : "configuration");
     puts("Encrypt, decrypt, inspect or migrate files without starting the bot.\n");
@@ -388,6 +400,7 @@ static void print_nxt_config_help(const char *exe, bool userlist)
     }
     puts("\nProtect output files and keep your original backups until tested.");
     puts("See README.md for step-by-step instructions.");
+#endif
 }
 
 static void print_nxt_help(const char *exe)
@@ -396,8 +409,14 @@ static void print_nxt_help(const char *exe)
     printf("Usage:\n  %s [OPTIONS] CONFIG_FILE       Start the bot\n",exe);
     printf("  %s -n                          Interactive new-config wizard\n",exe);
     printf("  %s -ne                         Expert configuration wizard\n",exe);
+#ifdef NXTCRYPT_DISABLED
+    puts("  NXTCRYPT: disabled at build time (legacy import available)");
+    printf("  %s config import ...              Import classic config\n",exe);
+    printf("  %s userlist import ...            Import classic userlist\n",exe);
+#else
     printf("  %s config COMMAND ...         Config crypto / legacy migration\n",exe);
     printf("  %s userlist COMMAND ...       Userlist crypto / legacy migration\n",exe);
+#endif
     puts("\nGeneral options:");
     puts("  -h, --help                    Full help");
     puts("  -v, --version                 Version and build information");
@@ -408,6 +427,7 @@ static void print_nxt_help(const char *exe)
 #ifdef HAVE_DEBUG
     puts("  -T                            Legacy decrypted-config debug flag");
 #endif
+#ifndef NXTCRYPT_DISABLED
     puts("\nStartup password options (for encrypted configs):");
     puts("  --password-file FILE          Password read from file");
     puts("  --password-stdin              Password read from standard input");
@@ -417,6 +437,7 @@ static void print_nxt_help(const char *exe)
     puts("\nFile management:");
     printf("  %s config --help              Encrypt/decrypt/import config files\n",exe);
     printf("  %s userlist --help            Encrypt/decrypt/import userlist files\n",exe);
+#endif
     puts("\nGlobal outgoing proxy (configure INSIDE the bot config file):");
     puts("  proxy-type none|socks5|http   'http' means HTTP CONNECT; none = direct");
     puts("  proxy-host HOST               Hostname or IPv4/IPv6 address");
@@ -431,8 +452,10 @@ static void print_nxt_help(const char *exe)
     puts("     Follow the wizard and note the generated .cfg filename.");
     printf("  2. %s bot.cfg\n",exe);
     puts("     Set 'dontfork ON' in the config to view startup logs.");
+#ifndef NXTCRYPT_DISABLED
     printf("  3. %s config encrypt bot.cfg --output bot.cfg.nxt\n",exe);
     printf("     %s bot.cfg.nxt\n",exe);
+#endif
     puts("\nPaths are relative to your current directory; starting from the");
     puts("repository root is usually easiest (./bin/psotnic bot.cfg).");
     puts("Docs: README.md, docs/NXT-PROXY.md");
@@ -470,13 +493,17 @@ void parse_cmdline(int argc, char *argv[])
 	if(argc > 1 && !strcmp(argv[1], "config"))
 	{
         nxtcrypto::finish_bootstrap();
-		int status = nxtcrypto::config_command(argc, argv);
+        const int status = argc>2 && !strcmp(argv[2],"import")
+            ? nxtlegacy::import_command(argc,argv)
+            : nxtcrypto::config_command(argc,argv);
 		::exit(status);
 	}
 	if(argc > 1 && !strcmp(argv[1], "userlist"))
 	{
         nxtcrypto::finish_bootstrap();
-		int status = nxtcrypto::userlist_command(argc, argv);
+        const int status = argc>2 && !strcmp(argv[2],"import")
+            ? nxtlegacy::import_userlist_command(argc,argv)
+            : nxtcrypto::userlist_command(argc,argv);
 		::exit(status);
 	}
 	int i;
@@ -538,11 +565,20 @@ void parse_cmdline(int argc, char *argv[])
 			exit(0);
 		}
 
+#ifdef NXTCRYPT_DISABLED
+        else if(!strcmp(argv[i], "--key-cache") ||
+                !strcmp(argv[i], "--password") ||
+                !strcmp(argv[i], "--password-file") ||
+                !strcmp(argv[i], "--password-stdin")) {
+            fprintf(stderr,"[-] NXTCRYPT support was not compiled in: %s\n",argv[i]);
+            ::exit(1);
+        }
+#else
 		else if(!strcmp(argv[i], "--password") && i+1 < argc)
 		{
 			++i;
 			nxtcrypto::set_password_argument(argv[i]);
-			sodium_memzero(argv[i], strlen(argv[i]));
+			nxtcrypto::secure_zero(argv[i], strlen(argv[i]));
 		}
 		else if(!strcmp(argv[i], "--password-file") && i+1 < argc)
 			nxtcrypto::set_password_file(argv[++i]);
@@ -550,6 +586,7 @@ void parse_cmdline(int argc, char *argv[])
 			nxtcrypto::set_password_stdin();
         else if(!strcmp(argv[i], "--key-cache"))
             nxtcrypto::enable_key_cache();
+#endif
 		else if(!strcmp(argv[i], "-n"))
 			createInitialConfig();
 

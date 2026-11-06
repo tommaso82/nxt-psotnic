@@ -1,0 +1,102 @@
+name: Optional NXTCRYPT build
+on:
+  push:
+    branches: [feature/optional-nxtcrypt-build]
+  pull_request:
+    branches: [master]
+    paths:
+      - 'configure'
+      - 'tests/test.pm'
+      - 'nxt-crypto.h'
+      - 'nxt-legacy.cpp'
+      - 'nxt-legacy.h'
+      - 'nxt-file.cpp'
+      - 'nxt-file.h'
+      - 'nxt-crypto-disabled.cpp'
+      - 'config-create.cpp'
+      - 'config-load.cpp'
+      - 'class-options.cpp'
+      - 'class-userlist.cpp'
+      - 'functions.cpp'
+      - '.github/workflows/nxt-optional-crypto.yml'
+  workflow_dispatch:
+
+jobs:
+  plaintext-linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install non-NXTCRYPT build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev build-essential perl
+      - name: Build without libsodium
+        run: |
+          test -x ./configure
+          ./configure --disable-nxtcrypt --disable-adns --disable-modules
+          grep -q NXTCRYPT_DISABLED Makefile.dynamic
+          if grep -q -- '-lsodium' Makefile.dynamic; then exit 1; fi
+          make dynamic
+          test -x bin/psotnic
+          if ldd bin/psotnic | grep -q libsodium; then exit 1; fi
+      - name: Verify plaintext-only CLI and proxy regression
+        run: |
+          ./bin/psotnic --help | grep -q 'NXTCRYPT: disabled'
+          ./bin/psotnic config --help | grep -q 'legacy Blowfish import available'
+          ./bin/psotnic userlist --help | grep -q 'legacy Blowfish import available'
+          if ./bin/psotnic config encrypt foo --output bar; then exit 1; fi
+          for opt in --key-cache --password-file --password-stdin --password; do
+            if ./bin/psotnic "$opt" > /tmp/nxt-unsupported-out 2>&1; then exit 1; fi
+            grep -q 'NXTCRYPT support was not compiled in' /tmp/nxt-unsupported-out
+          done
+          python3 tests/test-nxt-proxy-integration.py ./bin/psotnic
+      - name: Verify real legacy Blowfish import without libsodium
+        run: |
+          g++ -std=c++11 -O2 -I. class-blowfish.cpp tests/legacy-fixture.cpp -o /tmp/nxt-plain-legacy-fixture
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          /tmp/nxt-plain-legacy-fixture "$tmp/old.cfg"
+          printf '# legacy fixture\nnick legacybot\nsasl-password legacysecret\nrealname Legacy Fixture\n' > "$tmp/expected.cfg"
+          ./bin/psotnic config import "$tmp/old.cfg" --seed-file tests/fixtures/legacy-seed.h --output "$tmp/imported.cfg"
+          cmp "$tmp/expected.cfg" "$tmp/imported.cfg"
+          ./bin/psotnic config import "$tmp/old.cfg" --binary /tmp/nxt-plain-legacy-fixture --preview > "$tmp/preview.cfg"
+          cmp "$tmp/expected.cfg" "$tmp/preview.cfg"
+          test "$(stat -c %a "$tmp/imported.cfg")" = 600
+          g++ -std=c++11 -O2 -I. class-blowfish.cpp tests/classic-upstream-fixture.cpp -o /tmp/nxt-plain-legacy-ul-fixture
+          /tmp/nxt-plain-legacy-ul-fixture "$tmp/old.ul" ul
+          printf '# classic userlist\n21 42\n82 1700000000\n' > "$tmp/expected.ul"
+          ./bin/psotnic userlist import "$tmp/old.ul" --seed-file seed.h --output "$tmp/imported.ul"
+          cmp "$tmp/expected.ul" "$tmp/imported.ul"
+          if ./bin/psotnic config import "$tmp/old.cfg" --seed-file tests/fixtures/legacy-seed.h --output "$tmp/reject.NXT" > "$tmp/reject.log" 2>&1; then exit 1; fi
+          grep -q 'not compiled in' "$tmp/reject.log"
+          test ! -e "$tmp/reject.NXT"
+          if ./bin/psotnic userlist import "$tmp/old.cfg" --seed-file tests/fixtures/legacy-seed.h --output "$tmp/wrong.ul" > "$tmp/userlist.log" 2>&1; then exit 1; fi
+          grep -q 'Legacy import:' "$tmp/userlist.log"
+          test ! -e "$tmp/wrong.ul"
+      - name: Test both NXTCRYPT mode transitions with existing objects
+        run: |
+          sudo apt-get install -y libsodium-dev
+          test -f class-options.o
+          perl configure --disable-adns --disable-modules
+          test ! -e class-options.o
+          make dynamic
+          ldd bin/psotnic | grep -q libsodium
+          test -f class-options.o
+          perl configure --disable-nxtcrypt --disable-adns --disable-modules
+          test ! -e class-options.o
+          make dynamic
+          if ldd bin/psotnic | grep -q libsodium; then exit 1; fi
+  plaintext-freebsd:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: FreeBSD plaintext-only compile
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: '14.5'
+          prepare: |
+            pkg install -y perl5 gcc
+          run: |
+            test -x ./configure
+            perl configure --disable-nxtcrypt --disable-modules
+            make dynamic
+            test -x bin/psotnic
+            ./bin/psotnic --help | grep -q 'NXTCRYPT: disabled'
